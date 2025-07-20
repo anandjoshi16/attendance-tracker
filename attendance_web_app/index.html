@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Staff Attendance Tracker</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #f3f3f3;
+    }
+    h2 {
+      color: #333;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+    }
+    th, td {
+      padding: 10px;
+      border: 1px solid #ccc;
+      text-align: center;
+    }
+    input[type="time"], input[type="date"], input[type="text"] {
+      width: 90%;
+      padding: 5px;
+    }
+    .save-btn {
+      margin-top: 15px;
+      padding: 10px 20px;
+      background: green;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h2>📋 Staff Attendance Tracker</h2>
+  <table id="attendanceTable">
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Day</th>
+        <th>Name</th>
+        <th>Time In</th>
+        <th>Time Out</th>
+        <th>Total Hours</th>
+        <th>Remarks</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- Rows will be inserted by JavaScript -->
+    </tbody>
+  </table>
+  <button class="save-btn" onclick="saveData()">Save Data</button>
+
+  <script>
+    const staffNames = ["Anand", "Uttam", "Sunil", "Pravin", "Manoj", "Rohit"];
+    const tbody = document.querySelector("#attendanceTable tbody");
+
+    const today = new Date();
+    const todayStr = today.toISOString().split("T")[0];
+    const weekday = today.toLocaleDateString('en-IN', { weekday: 'long' });
+
+    staffNames.forEach(name => {
+      const row = document.createElement("tr");
+      row.innerHTML = `
+        <td><input type="date" value="${todayStr}"></td>
+        <td><input type="text" value="${weekday}" readonly></td>
+        <td>${name}</td>
+        <td><input type="time" onchange="updateHours(this)"></td>
+        <td><input type="time" onchange="updateHours(this)"></td>
+        <td><input type="text" readonly></td>
+        <td><input type="text"></td>
+      `;
+      tbody.appendChild(row);
+    });
+
+    function updateHours(elem) {
+      const row = elem.parentElement.parentElement;
+      const timeIn = row.cells[3].querySelector("input").value;
+      const timeOut = row.cells[4].querySelector("input").value;
+
+      if (timeIn && timeOut) {
+        const [h1, m1] = timeIn.split(":").map(Number);
+        const [h2, m2] = timeOut.split(":").map(Number);
+        let totalMin = (h2 * 60 + m2) - (h1 * 60 + m1);
+        if (totalMin < 0) totalMin += 1440;
+
+        const hours = Math.floor(totalMin / 60).toString().padStart(2, '0');
+        const mins = (totalMin % 60).toString().padStart(2, '0');
+        row.cells[5].querySelector("input").value = `${hours}:${mins}`;
+      }
+    }
+
+    function saveData() {
+      alert("✅ Data saved locally. (Note: For actual saving, connect to a database or backend.)");
+    }
+  </script>
+</body>
+</html>
