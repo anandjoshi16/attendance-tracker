@@ -2,146 +2,217 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Attendance Tracker</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Staff Attendance Tracker</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   <style>
     body {
       font-family: Arial, sans-serif;
-      background-color: #121212;
-      color: #ffffff;
+      padding: 0;
+      margin: 0;
+      background: #121212;
+      color: #fff;
+    }
+    header {
+      background: #1f1f1f;
+      padding: 15px;
+      text-align: center;
+      font-size: 22px;
+      font-weight: bold;
+      border-bottom: 2px solid #333;
+    }
+    .container {
       padding: 20px;
     }
-    h1 { display: flex; align-items: center; }
-    h1 i { margin-right: 10px; }
-    button {
-      background-color: #2196f3;
-      border: none;
-      padding: 10px 15px;
-      color: white;
+    .inputRow {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+    input, select, button {
+      padding: 10px;
       border-radius: 5px;
+      border: none;
+      font-size: 14px;
+    }
+    input[type="text"], input[type="time"], input[type="date"] {
+      background: #333;
+      color: #fff;
+      border: 1px solid #444;
+    }
+    button {
+      background: #03dac6;
+      color: #000;
       cursor: pointer;
-      margin: 5px;
     }
     table {
       width: 100%;
       border-collapse: collapse;
       margin-top: 20px;
+      background: #1f1f1f;
     }
     th, td {
+      border: 1px solid #444;
       padding: 10px;
       text-align: center;
-      border: 1px solid #444;
     }
-    input[type="time"] {
-      background: #222;
-      color: white;
-      border: 1px solid #555;
+    th {
+      background: #272727;
+    }
+    footer {
+      text-align: center;
+      padding: 15px;
+      color: #bbb;
+      font-size: 14px;
+      border-top: 1px solid #444;
+      margin-top: 30px;
+    }
+    .adminBox {
+      max-width: 300px;
+      margin: 50px auto;
+      background: #1e1e1e;
+      padding: 20px;
+      border-radius: 10px;
+      text-align: center;
+      border: 1px solid #333;
+    }
+    #attendanceSection {
+      display: none;
     }
   </style>
 </head>
 <body>
-<h1><i class="material-icons">event_note</i>Attendance Tracker</h1>
-<button onclick="markAttendance()">Mark Today</button>
-<button onclick="generateWeeklyPDF()">Download Weekly Report (PDF)</button>
-<table id="attendanceTable">
-  <thead>
-    <tr><th>Date</th><th>Time In</th><th>Time Out</th><th>Action</th></tr>
-  </thead>
-  <tbody></tbody>
-</table>
+  <header>📅 Staff Attendance Tracker</header>
 
-<script>
-const STORAGE_KEY = 'attendanceData';
-const ADMIN_PASS = '6508';
+  <div id="adminLogin" class="adminBox">
+    <h3>🔐 Admin Login</h3>
+    <input type="password" id="adminPassword" placeholder="Enter 4-digit Password" maxlength="4">
+    <br><br>
+    <button onclick="loginAdmin()">Login</button>
+    <p id="loginMsg" style="color:red;"></p>
+  </div>
 
-function getToday() {
-  return new Date().toISOString().slice(0, 10);
-}
+  <div class="container" id="attendanceSection">
+    <div class="inputRow">
+      <input type="date" id="entryDate">
+      <input type="time" id="timeIn" placeholder="Time In">
+      <input type="time" id="timeOut" placeholder="Time Out">
+      <input type="text" id="staffName" placeholder="Staff Name">
+      <button onclick="markAttendance()">Mark Today</button>
+    </div>
 
-function loadAttendance() {
-  return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-}
+    <table id="attendanceTable">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Staff Name</th>
+          <th>Time In</th>
+          <th>Time Out</th>
+          <th>Total Hours</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
 
-function saveAttendance(data) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-}
+    <button onclick="downloadPDF()">📥 Download Weekly Report (PDF)</button>
+  </div>
 
-function markAttendance() {
-  const data = loadAttendance();
-  const today = getToday();
-  if (data.find(entry => entry.date === today)) {
-    alert("Today's attendance already marked.");
-    return;
-  }
-  const timeIn = prompt("Enter Time In (HH:MM):");
-  const timeOut = prompt("Enter Time Out (HH:MM):");
-  if (timeIn && timeOut) {
-    data.push({ date: today, timeIn, timeOut });
-    saveAttendance(data);
-    renderTable();
-  }
-}
+  <footer>Made by Anand Joshi</footer>
 
-function editTime(date) {
-  const pass = prompt("Enter admin password:");
-  if (pass !== ADMIN_PASS) return alert("Wrong password!");
+  <script>
+    const passcode = "6508";
+    const tableBody = document.querySelector("#attendanceTable tbody");
 
-  const data = loadAttendance();
-  const entry = data.find(e => e.date === date);
-  if (entry) {
-    entry.timeIn = prompt("Edit Time In:", entry.timeIn) || entry.timeIn;
-    entry.timeOut = prompt("Edit Time Out:", entry.timeOut) || entry.timeOut;
-    saveAttendance(data);
-    renderTable();
-  }
-}
+    function loginAdmin() {
+      const pass = document.getElementById("adminPassword").value;
+      if (pass === passcode) {
+        document.getElementById("adminLogin").style.display = "none";
+        document.getElementById("attendanceSection").style.display = "block";
+        loadData();
+      } else {
+        document.getElementById("loginMsg").innerText = "❌ गलत पासवर्ड!";
+      }
+    }
 
-function renderTable() {
-  const tbody = document.querySelector('#attendanceTable tbody');
-  tbody.innerHTML = '';
-  const data = loadAttendance();
-  data.forEach(row => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${row.date}</td>
-      <td>${row.timeIn}</td>
-      <td>${row.timeOut}</td>
-      <td><button onclick="editTime('${row.date}')">Edit</button></td>
-    `;
-    tbody.appendChild(tr);
-  });
-}
+    function markAttendance() {
+      const date = document.getElementById("entryDate").value;
+      const name = document.getElementById("staffName").value;
+      const inTime = document.getElementById("timeIn").value;
+      const outTime = document.getElementById("timeOut").value;
 
-function generateWeeklyPDF() {
-  const data = loadAttendance();
-  const weekData = data.slice(-7);
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
+      if (!date || !name || !inTime || !outTime) return alert("Please fill all fields.");
 
-  doc.text("Weekly Attendance Report", 20, 20);
-  let y = 40;
-  weekData.forEach(entry => {
-    doc.text(`${entry.date}: ${entry.timeIn} - ${entry.timeOut}`, 20, y);
-    y += 10;
-  });
+      let data = JSON.parse(localStorage.getItem("attendance") || "[]");
 
-  doc.save("Weekly_Attendance.pdf");
-}
+      const existing = data.find(d => d.date === date && d.name === name);
+      if (existing) return alert("Entry already exists for this staff today.");
 
-function dailyAutoReport() {
-  const now = new Date();
-  const hour = now.getHours();
-  const min = now.getMinutes();
-  if (hour === 19 && min === 0) {
-    console.log("Auto report logic could be placed here");
-  }
-}
+      const hours = calcTotalHours(inTime, outTime);
+      data.push({ date, name, inTime, outTime, hours });
+      localStorage.setItem("attendance", JSON.stringify(data));
+      loadData();
+    }
 
-// Auto run every minute (for local simulation)
-setInterval(dailyAutoReport, 60000);
+    function loadData() {
+      tableBody.innerHTML = "";
+      const data = JSON.parse(localStorage.getItem("attendance") || "[]");
+      data.forEach((entry, i) => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td><input type="date" value="${entry.date}" onchange="editEntry(${i}, 'date', this.value)"></td>
+          <td><input type="text" value="${entry.name}" onchange="editEntry(${i}, 'name', this.value)"></td>
+          <td><input type="time" value="${entry.inTime}" onchange="editEntry(${i}, 'inTime', this.value)"></td>
+          <td><input type="time" value="${entry.outTime}" onchange="editEntry(${i}, 'outTime', this.value)"></td>
+          <td>${entry.hours}</td>
+          <td><button onclick="deleteEntry(${i})">❌</button></td>
+        `;
+        tableBody.appendChild(row);
+      });
+    }
 
-renderTable();
-</script>
+    function editEntry(i, field, value) {
+      const data = JSON.parse(localStorage.getItem("attendance"));
+      data[i][field] = value;
+      if (field === "inTime" || field === "outTime") {
+        data[i].hours = calcTotalHours(data[i].inTime, data[i].outTime);
+      }
+      localStorage.setItem("attendance", JSON.stringify(data));
+      loadData();
+    }
+
+    function deleteEntry(i) {
+      if (confirm("Are you sure?")) {
+        let data = JSON.parse(localStorage.getItem("attendance"));
+        data.splice(i, 1);
+        localStorage.setItem("attendance", JSON.stringify(data));
+        loadData();
+      }
+    }
+
+    function calcTotalHours(start, end) {
+      const [h1, m1] = start.split(":".map(Number));
+      const [h2, m2] = end.split(":".map(Number));
+      let diff = (h2 * 60 + m2) - (h1 * 60 + m1);
+      if (diff < 0) diff += 1440;
+      return `${Math.floor(diff / 60)}h ${diff % 60}m`;
+    }
+
+    function downloadPDF() {
+      const data = JSON.parse(localStorage.getItem("attendance") || "[]");
+      const doc = new jspdf.jsPDF();
+      doc.setFontSize(12);
+      doc.text("Weekly Attendance Report", 20, 20);
+
+      let y = 30;
+      data.forEach(d => {
+        doc.text(`${d.date} - ${d.name} - In: ${d.inTime}, Out: ${d.outTime}, Total: ${d.hours}`, 20, y);
+        y += 10;
+      });
+
+      doc.save("weekly_attendance.pdf");
+    }
+  </script>
 </body>
 </html>
