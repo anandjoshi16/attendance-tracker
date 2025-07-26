@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Staff Attendance Tracker</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -64,6 +65,11 @@
       color: white;
       border: 1px solid #666;
     }
+    footer {
+      text-align: center;
+      color: #888;
+      margin-top: 20px;
+    }
     @media screen and (max-width: 600px) {
       table, thead, tbody, th, td, tr {
         display: block;
@@ -101,6 +107,10 @@
       <tbody></tbody>
     </table>
     <button class="btn" onclick="downloadExcel()">⬇️ Download to Excel</button>
+    <button class="btn" onclick="generatePDF('daily')">📄 Download Daily PDF</button>
+    <button class="btn" onclick="generatePDF('weekly')">📅 Download Weekly PDF</button>
+    <button class="btn" onclick="generatePDF('monthly')">📆 Download Monthly PDF</button>
+    <footer>Made by Anand Joshi</footer>
   </div>
 
   <script>
@@ -125,14 +135,15 @@
       tbody.innerHTML = "";
       staffNames.forEach(name => {
         const row = document.createElement("tr");
+        const savedData = JSON.parse(localStorage.getItem(name + todayStr)) || {};
         row.innerHTML = `
-          <td><input type="date" value="${todayStr}"></td>
-          <td><input type="text" value="${weekday}" readonly></td>
+          <td><input type="date" value="${savedData.date || todayStr}" onchange="saveData(this)"></td>
+          <td><input type="text" value="${savedData.day || weekday}" readonly></td>
           <td>${name}</td>
-          <td><input type="time" onchange="updateHours(this)"></td>
-          <td><input type="time" onchange="updateHours(this)"></td>
-          <td><input type="text" readonly></td>
-          <td><input type="text"></td>
+          <td><input type="time" value="${savedData.timeIn || ''}" onchange="updateHours(this)"></td>
+          <td><input type="time" value="${savedData.timeOut || ''}" onchange="updateHours(this)"></td>
+          <td><input type="text" value="${savedData.total || ''}" readonly></td>
+          <td><input type="text" value="${savedData.remark || ''}" onchange="saveData(this)"></td>
         `;
         tbody.appendChild(row);
       });
@@ -140,6 +151,9 @@
 
     function updateHours(elem) {
       const row = elem.parentElement.parentElement;
+      const name = row.cells[2].textContent;
+      const date = row.cells[0].querySelector("input").value;
+      const day = row.cells[1].querySelector("input").value;
       const timeIn = row.cells[3].querySelector("input").value;
       const timeOut = row.cells[4].querySelector("input").value;
       if (timeIn && timeOut) {
@@ -149,8 +163,32 @@
         if (totalMin < 0) totalMin += 1440;
         const hours = String(Math.floor(totalMin / 60)).padStart(2, '0');
         const mins = String(totalMin % 60).padStart(2, '0');
-        row.cells[5].querySelector("input").value = hours + ":" + mins;
+        const total = hours + ":" + mins;
+        row.cells[5].querySelector("input").value = total;
+        saveData(elem);
       }
+    }
+
+    function saveData(elem) {
+      const row = elem.parentElement.parentElement;
+      const name = row.cells[2].textContent;
+      const date = row.cells[0].querySelector("input").value;
+      const day = row.cells[1].querySelector("input").value;
+      const timeIn = row.cells[3].querySelector("input").value;
+      const timeOut = row.cells[4].querySelector("input").value;
+      const total = row.cells[5].querySelector("input").value;
+      const remark = row.cells[6].querySelector("input").value;
+      const data = { date, day, timeIn, timeOut, total, remark };
+      localStorage.setItem(name + date, JSON.stringify(data));
+    }
+
+    function filterDate() {
+      const selectedDate = document.getElementById("filterDate").value;
+      const rows = document.querySelectorAll("#attendanceTable tbody tr");
+      rows.forEach(row => {
+        const dateValue = row.cells[0].querySelector("input").value;
+        row.style.display = dateValue === selectedDate || selectedDate === "" ? "" : "none";
+      });
     }
 
     function downloadExcel() {
@@ -173,13 +211,46 @@
       document.body.removeChild(link);
     }
 
-    function filterDate() {
-      const selectedDate = document.getElementById("filterDate").value;
+    async function generatePDF(mode) {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      let y = 10;
+
+      doc.setFontSize(14);
+      doc.text("Attendance Report - " + mode.toUpperCase(), 10, y);
+      y += 10;
+
       const rows = document.querySelectorAll("#attendanceTable tbody tr");
+
       rows.forEach(row => {
-        const dateValue = row.cells[0].querySelector("input").value;
-        row.style.display = dateValue === selectedDate || selectedDate === "" ? "" : "none";
+        const date = row.cells[0].querySelector("input").value;
+        const rowDate = new Date(date);
+        const now = new Date();
+
+        const day = row.cells[1].querySelector("input").value;
+        const name = row.cells[2].textContent;
+        const timeIn = row.cells[3].querySelector("input").value;
+        const timeOut = row.cells[4].querySelector("input").value;
+        const total = row.cells[5].querySelector("input").value;
+        const remark = row.cells[6].querySelector("input").value;
+
+        let include = false;
+        if (mode === "daily" && date === todayStr) include = true;
+        if (mode === "weekly") {
+          const diff = (now - rowDate) / (1000 * 60 * 60 * 24);
+          if (diff <= 7) include = true;
+        }
+        if (mode === "monthly" && rowDate.getMonth() === now.getMonth() && rowDate.getFullYear() === now.getFullYear()) {
+          include = true;
+        }
+
+        if (include) {
+          doc.text(`${date} | ${day} | ${name} | ${timeIn} - ${timeOut} | ${total} | ${remark}`, 10, y);
+          y += 10;
+        }
       });
+
+      doc.save(`attendance_${mode}.pdf`);
     }
   </script>
 </body>
