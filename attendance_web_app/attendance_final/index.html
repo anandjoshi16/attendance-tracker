@@ -3,181 +3,255 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Attendance Tracker - Dark Mode</title>
+  <title>Staff Attendance Tracker</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
     body {
-      background: #121212;
-      color: #fff;
       font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 20px;
+      padding: 10px;
+      background: #121212;
+      color: #f1f1f1;
     }
     h2 {
+      color: #ffffff;
       text-align: center;
-      color: #03DAC5;
-    }
-    .btn {
-      padding: 10px 20px;
-      background: #03DAC5;
-      border: none;
-      color: #000;
-      font-weight: bold;
-      cursor: pointer;
-      margin: 10px auto;
-      display: block;
     }
     table {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 20px;
-      background-color: #1e1e1e;
+      background: #1e1e1e;
+      font-size: 14px;
+      color: #fff;
     }
     th, td {
       padding: 8px;
       border: 1px solid #444;
       text-align: center;
     }
-    input {
-      width: 95%;
-      padding: 5px;
+    input[type="time"], input[type="date"], input[type="text"], input[type="password"] {
+      width: 100%;
+      padding: 4px;
+      box-sizing: border-box;
       background: #333;
       color: #fff;
       border: 1px solid #555;
     }
-    #loginBox {
+    .btn {
+      margin-top: 10px;
+      padding: 10px;
+      background: #03DAC5;
+      color: #000;
+      border: none;
+      cursor: pointer;
+      width: 100%;
       max-width: 300px;
-      margin: 100px auto;
-      padding: 20px;
+      display: block;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    #authBox {
       background: #1e1e1e;
-      border: 1px solid #444;
+      padding: 20px;
+      border: 1px solid #333;
+      max-width: 320px;
+      margin: 100px auto;
       text-align: center;
     }
-    #mainApp {
-      display: none;
+    #filterDate {
+      margin: 10px auto;
+      display: block;
+      padding: 6px;
+      background: #333;
+      color: white;
+      border: 1px solid #666;
+    }
+    footer {
+      text-align: center;
+      color: #888;
+      margin-top: 20px;
     }
     @media screen and (max-width: 600px) {
       table, thead, tbody, th, td, tr {
         display: block;
         width: 100%;
       }
-      tr {
-        margin-bottom: 15px;
-      }
-      th {
-        background: #222;
-        text-align: left;
-      }
+      tr { margin-bottom: 15px; border: 1px solid #333; padding: 10px; }
+      th { background: #333; text-align: left; color: #fff; }
     }
   </style>
 </head>
 <body>
+  <div id="authBox">
+    <h2>🔐 Admin Login</h2>
+    <input type="password" id="adminPass" placeholder="Enter 4-digit Admin Password">
+    <br><br>
+    <button class="btn" onclick="checkLogin()">Login</button>
+    <p id="loginMsg" style="color:red"></p>
+  </div>
 
-<div id="loginBox">
-  <h2>🔐 Admin Login</h2>
-  <input type="password" id="passInput" placeholder="Enter 4-digit Password" maxlength="4" />
-  <br><br>
-  <button class="btn" onclick="login()">Login</button>
-  <p id="loginMsg" style="color: red;"></p>
-</div>
+  <div id="mainApp" style="display:none">
+    <h2>📋 Staff Attendance Tracker</h2>
+    <input type="date" id="filterDate" onchange="filterDate()"> 📅 Filter by Date
+    <table id="attendanceTable">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Day</th>
+          <th>Name</th>
+          <th>Time In</th>
+          <th>Time Out</th>
+          <th>Total Hours</th>
+          <th>Remarks</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <button class="btn" onclick="downloadExcel()">⬇️ Download to Excel</button>
+    <button class="btn" onclick="generatePDF('daily')">📄 Download Daily PDF</button>
+    <button class="btn" onclick="generatePDF('weekly')">📅 Download Weekly PDF</button>
+    <button class="btn" onclick="generatePDF('monthly')">📆 Download Monthly PDF</button>
+    <footer>Made by Anand Joshi</footer>
+  </div>
 
-<div id="mainApp">
-  <h2>📋 Staff Attendance Tracker</h2>
-  <input type="date" id="filterDate" onchange="filterTable()" class="btn" />
-  <table id="attendanceTable">
-    <thead>
-      <tr>
-        <th>Date</th>
-        <th>Day</th>
-        <th>Name</th>
-        <th>Time In</th>
-        <th>Time Out</th>
-        <th>Total Hours</th>
-        <th>Remarks</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
-  <button class="btn" onclick="exportToday()">⬇ Export Today's Report</button>
-</div>
+  <script>
+    const staffNames = ["Anand", "Uttam", "Sunil", "Pravin", "Manoj", "Rohit"];
+    const today = new Date();
+    const todayStr = today.toISOString().split("T")[0];
+    const weekday = today.toLocaleDateString('en-IN', { weekday: 'long' });
 
-<script>
-const staff = ["Anand", "Uttam", "Sunil", "Pravin", "Manoj", "Rohit"];
-
-function login() {
-  const pin = document.getElementById("passInput").value;
-  if (pin === "6508") {
-    document.getElementById("loginBox").style.display = "none";
-    document.getElementById("mainApp").style.display = "block";
-    buildTable();
-  } else {
-    document.getElementById("loginMsg").innerText = "❌ Wrong password!";
-  }
-}
-
-function buildTable() {
-  const tbody = document.querySelector("tbody");
-  const today = new Date();
-  const dateStr = today.toISOString().split("T")[0];
-  const dayStr = today.toLocaleDateString('en-IN', { weekday: 'long' });
-
-  staff.forEach(name => {
-    const row = document.createElement("tr");
-    row.innerHTML = `
-      <td><input type="date" value="${dateStr}" /></td>
-      <td><input type="text" value="${dayStr}" readonly /></td>
-      <td>${name}</td>
-      <td><input type="time" onchange="calc(this)" /></td>
-      <td><input type="time" onchange="calc(this)" /></td>
-      <td><input type="text" readonly /></td>
-      <td><input type="text" /></td>
-    `;
-    tbody.appendChild(row);
-  });
-}
-
-function calc(elem) {
-  const row = elem.closest("tr");
-  const tin = row.cells[3].querySelector("input").value;
-  const tout = row.cells[4].querySelector("input").value;
-  if (tin && tout) {
-    const [h1, m1] = tin.split(":").map(Number);
-    const [h2, m2] = tout.split(":").map(Number);
-    let mins = (h2 * 60 + m2) - (h1 * 60 + m1);
-    if (mins < 0) mins += 1440;
-    const hh = String(Math.floor(mins / 60)).padStart(2, '0');
-    const mm = String(mins % 60).padStart(2, '0');
-    row.cells[5].querySelector("input").value = `${hh}:${mm}`;
-  }
-}
-
-function filterTable() {
-  const selDate = document.getElementById("filterDate").value;
-  document.querySelectorAll("tbody tr").forEach(row => {
-    const rowDate = row.cells[0].querySelector("input").value;
-    row.style.display = (selDate === "" || selDate === rowDate) ? "" : "none";
-  });
-}
-
-function exportToday() {
-  const selectedDate = document.getElementById("filterDate").value || new Date().toISOString().split("T")[0];
-  let csv = "Date,Day,Name,Time In,Time Out,Total Hours,Remarks\n";
-  document.querySelectorAll("tbody tr").forEach(row => {
-    const date = row.cells[0].querySelector("input").value;
-    if (date === selectedDate) {
-      const data = Array.from(row.cells).map(td => {
-        const inp = td.querySelector("input");
-        return inp ? inp.value : td.innerText;
-      });
-      csv += data.join(",") + "\n";
+    function checkLogin() {
+      const password = document.getElementById("adminPass").value;
+      if (password === "6508") {
+        document.getElementById("authBox").style.display = "none";
+        document.getElementById("mainApp").style.display = "block";
+        loadTable();
+      } else {
+        document.getElementById("loginMsg").innerText = "❌ गलत पासवर्ड!";
+      }
     }
-  });
-  const blob = new Blob([csv], { type: "text/csv" });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = "daily_attendance_" + selectedDate + ".csv";
-  link.click();
-}
-</script>
 
+    function loadTable() {
+      const tbody = document.querySelector("#attendanceTable tbody");
+      tbody.innerHTML = "";
+      staffNames.forEach(name => {
+        const row = document.createElement("tr");
+        const savedData = JSON.parse(localStorage.getItem(name + todayStr)) || {};
+        row.innerHTML = `
+          <td><input type="date" value="${savedData.date || todayStr}" onchange="saveData(this)"></td>
+          <td><input type="text" value="${savedData.day || weekday}" readonly></td>
+          <td>${name}</td>
+          <td><input type="time" value="${savedData.timeIn || ''}" onchange="updateHours(this)"></td>
+          <td><input type="time" value="${savedData.timeOut || ''}" onchange="updateHours(this)"></td>
+          <td><input type="text" value="${savedData.total || ''}" readonly></td>
+          <td><input type="text" value="${savedData.remark || ''}" onchange="saveData(this)"></td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+
+    function updateHours(elem) {
+      const row = elem.parentElement.parentElement;
+      const name = row.cells[2].textContent;
+      const date = row.cells[0].querySelector("input").value;
+      const day = row.cells[1].querySelector("input").value;
+      const timeIn = row.cells[3].querySelector("input").value;
+      const timeOut = row.cells[4].querySelector("input").value;
+      if (timeIn && timeOut) {
+        const [h1, m1] = timeIn.split(":").map(Number);
+        const [h2, m2] = timeOut.split(":").map(Number);
+        let totalMin = (h2 * 60 + m2) - (h1 * 60 + m1);
+        if (totalMin < 0) totalMin += 1440;
+        const hours = String(Math.floor(totalMin / 60)).padStart(2, '0');
+        const mins = String(totalMin % 60).padStart(2, '0');
+        const total = hours + ":" + mins;
+        row.cells[5].querySelector("input").value = total;
+        saveData(elem);
+      }
+    }
+
+    function saveData(elem) {
+      const row = elem.parentElement.parentElement;
+      const name = row.cells[2].textContent;
+      const date = row.cells[0].querySelector("input").value;
+      const day = row.cells[1].querySelector("input").value;
+      const timeIn = row.cells[3].querySelector("input").value;
+      const timeOut = row.cells[4].querySelector("input").value;
+      const total = row.cells[5].querySelector("input").value;
+      const remark = row.cells[6].querySelector("input").value;
+      const data = { date, day, timeIn, timeOut, total, remark };
+      localStorage.setItem(name + date, JSON.stringify(data));
+    }
+
+    function filterDate() {
+      const selectedDate = document.getElementById("filterDate").value;
+      const rows = document.querySelectorAll("#attendanceTable tbody tr");
+      rows.forEach(row => {
+        const dateValue = row.cells[0].querySelector("input").value;
+        row.style.display = dateValue === selectedDate || selectedDate === "" ? "" : "none";
+      });
+    }
+
+    function downloadExcel() {
+      let csvContent = "data:text/csv;charset=utf-8,";
+      const rows = document.querySelectorAll("#attendanceTable tr");
+      rows.forEach(row => {
+        const cols = row.querySelectorAll("td, th");
+        const rowData = Array.from(cols).map(col => {
+          const input = col.querySelector("input");
+          return input ? input.value : col.textContent;
+        });
+        csvContent += rowData.join(",") + "\n";
+      });
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", "attendance_data.csv");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    async function generatePDF(mode) {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      let y = 10;
+
+      doc.setFontSize(14);
+      doc.text("Attendance Report - " + mode.toUpperCase(), 10, y);
+      y += 10;
+
+      const rows = document.querySelectorAll("#attendanceTable tbody tr");
+
+      rows.forEach(row => {
+        const date = row.cells[0].querySelector("input").value;
+        const rowDate = new Date(date);
+        const now = new Date();
+
+        const day = row.cells[1].querySelector("input").value;
+        const name = row.cells[2].textContent;
+        const timeIn = row.cells[3].querySelector("input").value;
+        const timeOut = row.cells[4].querySelector("input").value;
+        const total = row.cells[5].querySelector("input").value;
+        const remark = row.cells[6].querySelector("input").value;
+
+        let include = false;
+        if (mode === "daily" && date === todayStr) include = true;
+        if (mode === "weekly") {
+          const diff = (now - rowDate) / (1000 * 60 * 60 * 24);
+          if (diff <= 7) include = true;
+        }
+        if (mode === "monthly" && rowDate.getMonth() === now.getMonth() && rowDate.getFullYear() === now.getFullYear()) {
+          include = true;
+        }
+
+        if (include) {
+          doc.text(`${date} | ${day} | ${name} | ${timeIn} - ${timeOut} | ${total} | ${remark}`, 10, y);
+          y += 10;
+        }
+      });
+
+      doc.save(`attendance_${mode}.pdf`);
+    }
+  </script>
 </body>
 </html>
