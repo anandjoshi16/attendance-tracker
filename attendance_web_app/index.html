@@ -1,596 +1,183 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Attendance Pro</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          fontFamily: { display: ['Inter', 'ui-sans-serif', 'system-ui'] },
-          boxShadow: {
-            glass: '0 10px 30px rgba(0,0,0,.15)'
-          }
-        }
-      }
-    }
-  </script>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <!-- Icons -->
-  <link rel="stylesheet" href="https://unpkg.com/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
-  <!-- Chart, XLSX, Day.js -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.11/dayjs.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.11/plugin/utc.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.11/plugin/timezone.js"></script>
-  <script>dayjs.extend(dayjs_plugin_utc); dayjs.extend(dayjs_plugin_timezone);</script>
-  
-  <!-- Firebase v10 CDN -->
-  <script type="module" defer>
-    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js';
-    import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js';
-    import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, addDoc, query, where, getDocs, orderBy, serverTimestamp, Timestamp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
-
-    // 1) INSERT YOUR FIREBASE CONFIG HERE ↓↓↓ (from your AttendanceApp)
-    const firebaseConfig = {
-      apiKey: "YOUR_API_KEY",
-      authDomain: "YOUR_AUTH_DOMAIN",
-      projectId: "YOUR_PROJECT_ID",
-      storageBucket: "YOUR_STORAGE_BUCKET",
-      messagingSenderId: "YOUR_MSG_ID",
-      appId: "YOUR_APP_ID"
-    };
-
-    // 2) OPTIONAL: Admin Access Key (use your 4-digit 6508 if you like)
-    const ADMIN_ACCESS_KEY = '6508';
-
-    // Init
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db = getFirestore(app);
-
-    // UI helpers
-    const $ = (sel) => document.querySelector(sel);
-    const $$ = (sel) => Array.from(document.querySelectorAll(sel));
-    const toast = (msg, variant = 'info') => {
-      const box = document.createElement('div');
-      box.className = `fixed left-1/2 -translate-x-1/2 top-6 z-50 px-4 py-2 rounded-xl text-sm font-medium shadow-glass backdrop-blur bg-white/80 border ${variant==='success'?'border-emerald-300':'variant'==='error'?'border-rose-300':'border-slate-200'}`;
-      box.textContent = msg;
-      document.body.appendChild(box);
-      setTimeout(()=>box.remove(), 2200);
-    };
-
-    // Background animation
-    const animateBg = () => {
-      const grad = $('#animated-bg');
-      let hue = 210;
-      setInterval(()=>{ hue = (hue + 0.3) % 360; grad.style.background = `radial-gradient(1200px 600px at 10% 10%, hsl(${(hue+30)%360} 100% 92% / .8), transparent), radial-gradient(1100px 600px at 90% 50%, hsl(${(hue+180)%360} 100% 92% / .8), transparent), linear-gradient(135deg, hsl(${hue} 70% 96%), hsl(${(hue+60)%360} 70% 96%))`; }, 30);
-    };
-
-    // Auth state
-    let currentUser = null; // {uid, displayName, email}
-    let currentProfile = null; // Firestore user doc
-
-    const ensureUserDoc = async (user, role = 'staff') => {
-      const ref = doc(db, 'users', user.uid);
-      const snap = await getDoc(ref);
-      if (!snap.exists()) {
-        const profile = { uid: user.uid, name: user.displayName || user.email.split('@')[0], email: user.email, role, createdAt: serverTimestamp(), active: true };
-        await setDoc(ref, profile);
-        return profile;
-      }
-      return snap.data();
-    };
-
-    const setRole = async (uid, role) => updateDoc(doc(db,'users',uid), { role });
-
-    const switchView = (isAuthed) => {
-      $('#auth-card').classList.toggle('hidden', !!isAuthed);
-      $('#app').classList.toggle('hidden', !isAuthed);
-    };
-
-    const renderUserBar = (profile) => {
-      $('#user-name').textContent = profile?.name || 'User';
-      $('#user-role').textContent = profile?.role?.toUpperCase() || 'STAFF';
-      $('#admin-badge').classList.toggle('hidden', profile?.role !== 'admin');
-      $('#tab-admin').classList.toggle('hidden', profile?.role !== 'admin');
-    };
-
-    // Attendance model
-    // Collection: attendance
-    // doc fields: uid, name, dateKey (YYYY-MM-DD), monthKey (YYYY-MM), inTime, outTime, status, createdAt
-    const dateKey = (d = dayjs()) => d.tz(Intl.DateTimeFormat().resolvedOptions().timeZone).format('YYYY-MM-DD');
-    const monthKey = (d = dayjs()) => d.tz(Intl.DateTimeFormat().resolvedOptions().timeZone).format('YYYY-MM');
-
-    const markIn = async () => {
-      const today = dateKey();
-      const month = monthKey();
-      const q = query(collection(db,'attendance'), where('uid','==', currentUser.uid), where('dateKey','==', today));
-      const snap = await getDocs(q);
-      if (!snap.empty) { toast('Already marked today.'); return; }
-      await addDoc(collection(db,'attendance'), {
-        uid: currentUser.uid,
-        name: currentProfile.name,
-        dateKey: today,
-        monthKey: month,
-        inTime: Timestamp.now(),
-        outTime: null,
-        status: 'Present',
-        createdAt: serverTimestamp()
-      });
-      toast('Marked IN. Have a great day!','success');
-      await loadMyToday();
-      await loadMyMonth();
-      await loadDashboard();
-    };
-
-    const markOut = async () => {
-      const today = dateKey();
-      const q = query(collection(db,'attendance'), where('uid','==', currentUser.uid), where('dateKey','==', today));
-      const snap = await getDocs(q);
-      if (snap.empty) { toast('Please mark IN first.'); return; }
-      const docref = snap.docs[0].ref;
-      await updateDoc(docref, { outTime: Timestamp.now() });
-      toast('Marked OUT. See you!','success');
-      await loadMyToday();
-      await loadMyMonth();
-      await loadDashboard();
-    };
-
-    // Admin: quick mark for any staff (IN/OUT), edit times, export
-    const fetchMonth = async (mKey) => {
-      const qy = query(collection(db,'attendance'), where('monthKey','==', mKey));
-      const sn = await getDocs(qy);
-      return sn.docs.map(d => ({ id:d.id, ...d.data() }));
-    };
-
-    const minutes = (from, to) => from && to ? Math.max(0, Math.round((to.toDate() - from.toDate())/60000)) : 0;
-
-    const fillTable = (rows, target = '#admin-table-body') => {
-      const tbody = $(target); tbody.innerHTML = '';
-      rows.sort((a,b)=> a.dateKey===b.dateKey ? (a.name||'').localeCompare(b.name||'') : a.dateKey.localeCompare(b.dateKey));
-      for (const r of rows) {
-        const tr = document.createElement('tr');
-        tr.className = 'border-b last:border-none hover:bg-white/40';
-        const dur = minutes(r.inTime, r.outTime);
-        tr.innerHTML = `
-          <td class="px-3 py-2">${r.dateKey}</td>
-          <td class="px-3 py-2 font-medium">${r.name||''}</td>
-          <td class="px-3 py-2">${r.inTime? dayjs(r.inTime.toDate()).format('HH:mm') : '-'}</td>
-          <td class="px-3 py-2">${r.outTime? dayjs(r.outTime.toDate()).format('HH:mm') : '-'}</td>
-          <td class="px-3 py-2">${(dur/60).toFixed(1)}h</td>
-          <td class="px-3 py-2">
-            <button data-id="${r.id}" class="edit-btn ti ti-pencil px-2 py-1 rounded-md bg-slate-900 text-white text-xs">Edit</button>
-          </td>`;
-        tbody.appendChild(tr);
-      }
-      // wire edit buttons
-      $$('#admin-table-body .edit-btn').forEach(btn=> btn.addEventListener('click',()=> openEdit(btn.dataset.id)) );
-    };
-
-    const openEdit = async (id) => {
-      const ref = doc(db,'attendance', id); const snap = await getDoc(ref); if(!snap.exists()) return;
-      const r = snap.data();
-      $('#edit-id').value = id;
-      $('#edit-name').value = r.name || '';
-      $('#edit-date').value = r.dateKey;
-      $('#edit-in').value = r.inTime ? dayjs(r.inTime.toDate()).format('HH:mm') : '';
-      $('#edit-out').value = r.outTime ? dayjs(r.outTime.toDate()).format('HH:mm') : '';
-      $('#edit-modal').classList.remove('hidden');
-    };
-
-    const saveEdit = async (e) => {
-      e.preventDefault();
-      const key = $('#edit-admin-key').value.trim();
-      if (key !== ADMIN_ACCESS_KEY) { toast('Invalid admin key.','error'); return; }
-      const id = $('#edit-id').value;
-      const date = $('#edit-date').value;
-      const inStr = $('#edit-in').value;
-      const outStr = $('#edit-out').value;
-      const today = dayjs(date);
-      const inT = inStr? Timestamp.fromDate(dayjs(`${date} ${inStr}`).toDate()) : null;
-      const outT = outStr? Timestamp.fromDate(dayjs(`${date} ${outStr}`).toDate()) : null;
-      await updateDoc(doc(db,'attendance', id), { dateKey: date, monthKey: today.format('YYYY-MM'), inTime: inT, outTime: outT });
-      $('#edit-modal').classList.add('hidden');
-      toast('Updated successfully.','success');
-      await loadDashboard();
-      await loadMyMonth();
-    };
-
-    const exportXLSX = (rows, filename='attendance.xlsx') => {
-      const data = rows.map(r=> ({
-        Date: r.dateKey,
-        Name: r.name,
-        In: r.inTime? dayjs(r.inTime.toDate()).format('HH:mm') : '',
-        Out: r.outTime? dayjs(r.outTime.toDate()).format('HH:mm') : '',
-        Hours: (minutes(r.inTime, r.outTime)/60).toFixed(2)
-      }));
-      const ws = XLSX.utils.json_to_sheet(data);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Attendance');
-      XLSX.writeFile(wb, filename);
-    };
-
-    // Charts
-    let chartInstance = null;
-    const renderChart = (rows) => {
-      const ctx = $('#chart').getContext('2d');
-      const byDay = {};
-      rows.forEach(r => { byDay[r.dateKey] = (byDay[r.dateKey]||0) + 1; });
-      const labels = Object.keys(byDay).sort();
-      const values = labels.map(k=>byDay[k]);
-      if (chartInstance) chartInstance.destroy();
-      chartInstance = new Chart(ctx, {
-        type: 'bar', data: { labels, datasets: [{ label: 'Present Count', data: values }] }, options: { responsive:true, plugins: { legend:{ display:false } } }
-      });
-    };
-
-    // Loaders
-    const loadMyToday = async () => {
-      const qy = query(collection(db,'attendance'), where('uid','==', currentUser.uid), where('dateKey','==', dateKey()));
-      const sn = await getDocs(qy);
-      const present = !sn.empty;
-      $('#btn-in').disabled = present;
-      $('#btn-out').disabled = !present || !!sn.docs[0].data().outTime;
-      const box = $('#today-status');
-      box.innerHTML = present ? `<span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-100 text-emerald-700"><i class="ti ti-check"></i> Present</span>` : `<span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-100 text-amber-700"><i class="ti ti-alert-triangle"></i> Not Marked</span>`;
-    };
-
-    const loadMyMonth = async () => {
-      const rows = (await fetchMonth(monthKey()));
-      const mine = rows.filter(r=> r.uid === currentUser.uid);
-      fillTable(mine, '#my-table-body');
-      // total hours
-      const totalMin = mine.reduce((s,r)=> s + minutes(r.inTime, r.outTime), 0);
-      $('#my-total').textContent = `${(totalMin/60).toFixed(1)} h`;
-    };
-
-    const loadDashboard = async () => {
-      const mKey = $('#admin-month').value || monthKey();
-      const rows = await fetchMonth(mKey);
-      fillTable(rows, '#admin-table-body');
-      renderChart(rows);
-      // KPIs
-      const uniqueDates = new Set(rows.map(r=>r.dateKey));
-      const uniqueStaff = new Set(rows.map(r=>r.uid));
-      $('#kpi-days').textContent = uniqueDates.size;
-      $('#kpi-records').textContent = rows.length;
-      $('#kpi-staff').textContent = uniqueStaff.size;
-      // cache for export
-      window.__cacheRows = rows;
-    };
-
-    // Staff directory (admin)
-    const loadStaffList = async () => {
-      const sn = await getDocs(collection(db,'users'));
-      const list = sn.docs.map(d=>({ id:d.id, ...d.data() })).filter(u=>u.active!==false);
-      const wrap = $('#staff-list'); wrap.innerHTML = '';
-      for (const u of list) {
-        const li = document.createElement('div');
-        li.className = 'flex items-center justify-between px-3 py-2 rounded-lg bg-white/60 border';
-        li.innerHTML = `
-          <div class="flex items-center gap-3"><div class="w-8 h-8 rounded-full bg-gradient-to-br from-slate-200 to-slate-50 grid place-items-center"><i class="ti ti-user"></i></div>
-          <div>
-            <div class="font-semibold">${u.name||u.email}</div>
-            <div class="text-xs text-slate-500">${u.email}</div>
-          </div></div>
-          <div class="flex items-center gap-2">
-            <span class="text-xs px-2 py-1 rounded-full ${u.role==='admin'?'bg-indigo-100 text-indigo-700':'bg-emerald-100 text-emerald-700'}">${u.role||'staff'}</span>
-            <button data-id="${u.id}" class="promote px-2 py-1 text-xs rounded-md bg-slate-900 text-white">Toggle Admin</button>
-          </div>`;
-        wrap.appendChild(li);
-      }
-      $$('#staff-list .promote').forEach(btn=> btn.addEventListener('click', async ()=>{
-        const uid = btn.dataset.id; const ref = doc(db,'users',uid); const snap = await getDoc(ref);
-        if (!snap.exists()) return; const cur = snap.data().role || 'staff';
-        await setRole(uid, cur==='admin'?'staff':'admin');
-        toast('Role updated.','success'); loadStaffList();
-      }));
-    };
-
-    // Auth form handlers
-    const signIn = async (e) => {
-      e.preventDefault();
-      const email = $('#email').value.trim(); const pass = $('#password').value.trim();
-      await signInWithEmailAndPassword(auth, email, pass);
-    };
-
-    const signUp = async (e) => {
-      e.preventDefault();
-      const name = $('#su-name').value.trim();
-      const email = $('#su-email').value.trim();
-      const pass = $('#su-password').value.trim();
-      const key = $('#su-adminkey').value.trim();
-      const role = key && key === ADMIN_ACCESS_KEY ? 'admin' : 'staff';
-      const { user } = await createUserWithEmailAndPassword(auth, email, pass);
-      await updateProfile(user, { displayName: name });
-      currentProfile = await ensureUserDoc(user, role);
-      toast('Account created.');
-    };
-
-    const logout = async () => { await signOut(auth); };
-
-    // Tabs
-    const activateTab = (tabId) => {
-      $$('#tabs > button').forEach(b=> b.classList.remove('bg-slate-900','text-white'));
-      $$('#tabpanels > section').forEach(s=> s.classList.add('hidden'));
-      const btn = document.getElementById(tabId); btn.classList.add('bg-slate-900','text-white');
-      const panel = document.getElementById(btn.dataset.panel); panel.classList.remove('hidden');
-    };
-
-    // DOM Ready
-    window.addEventListener('DOMContentLoaded', () => {
-      animateBg();
-      $('#signin-form').addEventListener('submit', signIn);
-      $('#signup-form').addEventListener('submit', signUp);
-      $('#logout').addEventListener('click', logout);
-      $('#btn-in').addEventListener('click', markIn);
-      $('#btn-out').addEventListener('click', markOut);
-      $('#tab-me').addEventListener('click', ()=>activateTab('tab-me'));
-      $('#tab-admin').addEventListener('click', ()=>activateTab('tab-admin'));
-      $('#admin-month').value = monthKey();
-      $('#refresh-admin').addEventListener('click', loadDashboard);
-      $('#export-xlsx').addEventListener('click', ()=> exportXLSX(window.__cacheRows||[], `attendance-${$('#admin-month').value}.xlsx`));
-      $('#edit-cancel').addEventListener('click', ()=> $('#edit-modal').classList.add('hidden'));
-      $('#edit-form').addEventListener('submit', saveEdit);
-    });
-
-    onAuthStateChanged(auth, async (user) => {
-      currentUser = user || null;
-      if (!user) { switchView(false); return; }
-      currentProfile = await ensureUserDoc(user);
-      renderUserBar(currentProfile);
-      switchView(true);
-      activateTab('tab-me');
-      await loadMyToday();
-      await loadMyMonth();
-      if (currentProfile.role === 'admin') { await loadDashboard(); await loadStaffList(); }
-    });
-  </script>
-
   <style>
-    body { font-family: Inter, ui-sans-serif, system-ui; }
-    .glass { background: rgba(255,255,255,.6); backdrop-filter: blur(10px); }
+    body {
+      font-family: Arial, sans-serif;
+      background: linear-gradient(to right, #e3fce1, #ece9ff);
+      margin: 0; padding: 0;
+    }
+    .container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    .card {
+      background: white;
+      padding: 30px;
+      border-radius: 15px;
+      box-shadow: 0px 4px 10px rgba(0,0,0,0.1);
+      margin: 10px;
+      width: 300px;
+    }
+    input {
+      width: 100%;
+      padding: 10px;
+      margin: 10px 0;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+    }
+    button {
+      width: 100%;
+      padding: 10px;
+      border: none;
+      border-radius: 8px;
+      background: #0f172a;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    button:hover { background: #334155; }
+    .hidden { display: none; }
+    #dashboard {
+      padding: 20px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 10px;
+      text-align: center;
+    }
+    th {
+      background: #0f172a;
+      color: white;
+    }
   </style>
 </head>
-<body class="min-h-screen relative">
-  <!-- Animated Background -->
-  <div id="animated-bg" class="fixed inset-0 -z-10"></div>
+<body>
 
-  <!-- Nav -->
-  <header class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-    <div class="flex items-center gap-2">
-      <div class="w-9 h-9 rounded-2xl bg-slate-900 text-white grid place-items-center shadow-glass"><i class="ti ti-calendar-time"></i></div>
-      <div>
-        <div class="text-lg font-bold">Attendance Pro</div>
-        <div class="text-[11px] text-slate-500">Fast • Secure • Beautiful</div>
-      </div>
-    </div>
-    <div class="flex items-center gap-3">
-      <span id="admin-badge" class="hidden text-xs px-2 py-1 rounded-full bg-indigo-100 text-indigo-700">ADMIN</span>
-      <div class="text-sm"><span id="user-name" class="font-semibold">Guest</span> · <span id="user-role">—</span></div>
-      <button id="logout" class="px-3 py-2 rounded-xl bg-slate-900 text-white hidden sm:block">Logout</button>
-    </div>
-  </header>
-
-  <!-- Auth Card -->
-  <section id="auth-card" class="max-w-5xl mx-auto p-4">
-    <div class="grid md:grid-cols-2 gap-6">
-      <div class="glass rounded-2xl p-6 shadow-glass border">
-        <h2 class="text-xl font-bold mb-2">Welcome Back</h2>
-        <p class="text-sm text-slate-600 mb-4">Login to mark or manage attendance.</p>
-        <form id="signin-form" class="space-y-3">
-          <input id="email" type="email" placeholder="Email" class="w-full px-3 py-2 rounded-xl border bg-white/80" required>
-          <input id="password" type="password" placeholder="Password" class="w-full px-3 py-2 rounded-xl border bg-white/80" required>
-          <button class="w-full px-4 py-2 rounded-xl bg-slate-900 text-white">Sign In</button>
-        </form>
-      </div>
-      <div class="glass rounded-2xl p-6 shadow-glass border">
-        <h2 class="text-xl font-bold mb-2">Create Account</h2>
-        <p class="text-sm text-slate-600 mb-4">Use Admin Key to create an admin.</p>
-        <form id="signup-form" class="space-y-3">
-          <input id="su-name" type="text" placeholder="Full name" class="w-full px-3 py-2 rounded-xl border bg-white/80" required>
-          <input id="su-email" type="email" placeholder="Email" class="w-full px-3 py-2 rounded-xl border bg-white/80" required>
-          <input id="su-password" type="password" placeholder="Password" class="w-full px-3 py-2 rounded-xl border bg-white/80" required>
-          <input id="su-adminkey" type="password" placeholder="Admin Access Key (optional)" class="w-full px-3 py-2 rounded-xl border bg-white/80">
-          <button class="w-full px-4 py-2 rounded-xl bg-emerald-600 text-white">Sign Up</button>
-        </form>
-        <p class="text-xs text-slate-500 mt-3">Tip: Use key <span class="font-mono">6508</span> to create admin (change anytime in code).</p>
-      </div>
-    </div>
-  </section>
-
-  <!-- App -->
-  <main id="app" class="hidden max-w-7xl mx-auto px-4 pb-16">
-    <!-- Tabs -->
-    <div id="tabs" class="flex gap-2 mb-4">
-      <button id="tab-me" data-panel="panel-me" class="px-4 py-2 rounded-xl bg-white/70 border">My Attendance</button>
-      <button id="tab-admin" data-panel="panel-admin" class="px-4 py-2 rounded-xl bg-white/70 border hidden">Admin Dashboard</button>
+  <div id="auth" class="container">
+    <div class="card">
+      <h2>Welcome Back</h2>
+      <input type="email" id="loginEmail" placeholder="Email">
+      <input type="password" id="loginPassword" placeholder="Password">
+      <button onclick="signIn()">Sign In</button>
     </div>
 
-    <div id="tabpanels">
-      <!-- Staff Panel -->
-      <section id="panel-me" class="grid lg:grid-cols-3 gap-6">
-        <div class="lg:col-span-1 glass rounded-2xl p-6 border shadow-glass">
-          <h3 class="text-lg font-bold mb-1">Today</h3>
-          <p class="text-sm text-slate-600 mb-4">Mark your IN/OUT in one click.</p>
-          <div id="today-status" class="mb-4"></div>
-          <div class="flex gap-3">
-            <button id="btn-in" class="flex-1 px-4 py-3 rounded-xl bg-emerald-600 text-white font-semibold"><i class="ti ti-login-2 mr-1"></i> Mark IN</button>
-            <button id="btn-out" class="flex-1 px-4 py-3 rounded-xl bg-rose-600 text-white font-semibold"><i class="ti ti-logout-2 mr-1"></i> Mark OUT</button>
-          </div>
-        </div>
-        <div class="lg:col-span-2 glass rounded-2xl p-6 border shadow-glass">
-          <div class="flex items-center justify-between mb-3">
-            <h3 class="text-lg font-bold">This Month</h3>
-            <div class="text-sm text-slate-600">Total Hours: <span id="my-total" class="font-semibold">0.0 h</span></div>
-          </div>
-          <div class="overflow-auto rounded-xl border bg-white/60">
-            <table class="w-full text-sm">
-              <thead class="bg-white/80">
-                <tr class="text-left">
-                  <th class="px-3 py-2">Date</th>
-                  <th class="px-3 py-2">Name</th>
-                  <th class="px-3 py-2">In</th>
-                  <th class="px-3 py-2">Out</th>
-                  <th class="px-3 py-2">Hours</th>
-                </tr>
-              </thead>
-              <tbody id="my-table-body"></tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <!-- Admin Panel -->
-      <section id="panel-admin" class="hidden space-y-6">
-        <div class="grid lg:grid-cols-3 gap-6">
-          <div class="glass rounded-2xl p-6 border shadow-glass">
-            <div class="flex items-center justify-between">
-              <h3 class="text-lg font-bold">Summary</h3>
-              <div class="flex items-center gap-2">
-                <input id="admin-month" type="month" class="px-2 py-1 rounded-lg border bg-white/70" />
-                <button id="refresh-admin" class="px-3 py-2 rounded-lg bg-slate-900 text-white">Refresh</button>
-              </div>
-            </div>
-            <div class="grid grid-cols-3 gap-3 mt-4">
-              <div class="p-4 rounded-xl bg-white/70 border">
-                <div class="text-xs text-slate-500">Days</div>
-                <div id="kpi-days" class="text-2xl font-bold">0</div>
-              </div>
-              <div class="p-4 rounded-xl bg-white/70 border">
-                <div class="text-xs text-slate-500">Records</div>
-                <div id="kpi-records" class="text-2xl font-bold">0</div>
-              </div>
-              <div class="p-4 rounded-xl bg-white/70 border">
-                <div class="text-xs text-slate-500">Staff</div>
-                <div id="kpi-staff" class="text-2xl font-bold">0</div>
-              </div>
-            </div>
-          </div>
-          <div class="lg:col-span-2 glass rounded-2xl p-6 border shadow-glass">
-            <h3 class="text-lg font-bold mb-2">Attendance Trend</h3>
-            <canvas id="chart" height="100"></canvas>
-          </div>
-        </div>
-
-        <div class="glass rounded-2xl p-6 border shadow-glass">
-          <div class="flex items-center justify-between mb-3">
-            <h3 class="text-lg font-bold">All Records (Month)</h3>
-            <div class="flex items-center gap-2">
-              <button id="export-xlsx" class="px-3 py-2 rounded-lg bg-emerald-600 text-white"><i class="ti ti-file-spreadsheet mr-1"></i> Export XLSX</button>
-            </div>
-          </div>
-          <div class="overflow-auto rounded-xl border bg-white/60">
-            <table class="w-full text-sm">
-              <thead class="bg-white/80">
-                <tr class="text-left">
-                  <th class="px-3 py-2">Date</th>
-                  <th class="px-3 py-2">Name</th>
-                  <th class="px-3 py-2">In</th>
-                  <th class="px-3 py-2">Out</th>
-                  <th class="px-3 py-2">Hours</th>
-                  <th class="px-3 py-2">Action</th>
-                </tr>
-              </thead>
-              <tbody id="admin-table-body"></tbody>
-            </table>
-          </div>
-        </div>
-
-        <div class="glass rounded-2xl p-6 border shadow-glass">
-          <div class="flex items-center justify-between mb-3">
-            <h3 class="text-lg font-bold">Staff Directory</h3>
-            <p class="text-sm text-slate-500">Promote/demote admins easily.</p>
-          </div>
-          <div id="staff-list" class="grid md:grid-cols-2 lg:grid-cols-3 gap-3"></div>
-        </div>
-      </section>
+    <div class="card">
+      <h2>Create Account</h2>
+      <input type="text" id="regName" placeholder="Full Name">
+      <input type="email" id="regEmail" placeholder="Email">
+      <input type="password" id="regPassword" placeholder="Password">
+      <button onclick="signUp()">Sign Up</button>
     </div>
-  </main>
-
-  <!-- Edit Modal -->
-  <div id="edit-modal" class="hidden fixed inset-0 z-50 grid place-items-center bg-black/30">
-    <form id="edit-form" class="glass w-[520px] max-w-[92vw] rounded-2xl p-6 border shadow-glass">
-      <h3 class="text-lg font-bold mb-3">Edit Attendance</h3>
-      <input type="hidden" id="edit-id">
-      <div class="grid grid-cols-2 gap-3">
-        <div>
-          <label class="text-xs text-slate-500">Name</label>
-          <input id="edit-name" disabled class="w-full px-3 py-2 rounded-xl border bg-white/80" />
-        </div>
-        <div>
-          <label class="text-xs text-slate-500">Date</label>
-          <input id="edit-date" type="date" class="w-full px-3 py-2 rounded-xl border bg-white/80" required/>
-        </div>
-        <div>
-          <label class="text-xs text-slate-500">IN Time (HH:mm)</label>
-          <input id="edit-in" type="time" class="w-full px-3 py-2 rounded-xl border bg-white/80"/>
-        </div>
-        <div>
-          <label class="text-xs text-slate-500">OUT Time (HH:mm)</label>
-          <input id="edit-out" type="time" class="w-full px-3 py-2 rounded-xl border bg-white/80"/>
-        </div>
-      </div>
-      <div class="mt-4">
-        <label class="text-xs text-slate-500">Admin Access Key</label>
-        <input id="edit-admin-key" type="password" class="w-full px-3 py-2 rounded-xl border bg-white/80" placeholder="Enter admin key to save" required>
-      </div>
-      <div class="flex justify-end gap-2 mt-4">
-        <button id="edit-cancel" type="button" class="px-4 py-2 rounded-xl border">Cancel</button>
-        <button type="submit" class="px-4 py-2 rounded-xl bg-slate-900 text-white">Save</button>
-      </div>
-    </form>
   </div>
 
-  <footer class="max-w-7xl mx-auto px-4 py-10 text-center text-xs text-slate-500">
-    Made with ♥ • Attendance Pro • © 2025
-  </footer>
+  <div id="dashboard" class="hidden">
+    <h1>Attendance Dashboard</h1>
+    <button onclick="logout()">Logout</button>
+    <h2>Mark Attendance</h2>
+    <button onclick="markAttendance()">Mark Present</button>
 
-  <!--
-  =============================
-  FIREBASE SECURITY RULES (copy into Firestore rules)
-  =============================
-  rules_version = '2';
-  service cloud.firestore {
-    match /databases/{database}/documents {
-      match /users/{uid} {
-        allow read: if request.auth != null; // everyone logged-in can read names/roles
-        allow write: if request.auth != null && request.auth.uid == uid; // users can update their own profile
-      }
-      match /attendance/{doc} {
-        allow create: if request.auth != null && request.resource.data.uid == request.auth.uid; // user creating own record
-        allow read: if request.auth != null; // all logged-in can read (adjust if needed)
-        allow update, delete: if request.auth != null && (
-          // user can update their own doc (e.g., mark OUT for same day)
-          resource.data.uid == request.auth.uid ||
-          // admins can edit any record
-          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
-        );
-      }
+    <h2>Monthly Attendance</h2>
+    <table id="attendanceTable">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+<script>
+  let currentUser = null;
+  let attendance = JSON.parse(localStorage.getItem("attendance")) || [];
+
+  function signIn() {
+    const email = document.getElementById("loginEmail").value;
+    const pass = document.getElementById("loginPassword").value;
+
+    // 🔑 Default admin login
+    if (email === "admin@demo.com" && pass === "123456") {
+      currentUser = { name: "Admin", email };
+      showDashboard();
+      alert("Logged in as Admin!");
+      return;
+    }
+
+    // Normal user login (saved locally)
+    let users = JSON.parse(localStorage.getItem("users")) || [];
+    let found = users.find(u => u.email === email && u.pass === pass);
+    if (found) {
+      currentUser = found;
+      showDashboard();
+      alert("Login successful!");
+    } else {
+      alert("Invalid login details.");
     }
   }
 
-  =============================
-  HOW TO DEPLOY (GitHub Pages)
-  =============================
-  1) Replace Firebase config at the top.
-  2) Save this file as index.html in your repo (attendance-tracker/attendance_web_app/).
-  3) Commit & push → GitHub Pages will serve automatically if enabled.
+  function signUp() {
+    const name = document.getElementById("regName").value;
+    const email = document.getElementById("regEmail").value;
+    const pass = document.getElementById("regPassword").value;
 
-  =============================
-  NOTES
-  - Role management: Use the Admin Key during Sign Up to create first admin, then promote/demote inside Admin > Staff Directory.
-  - Monthly storage: Each record carries monthKey (YYYY-MM). Admin month selector filters + exports per month.
-  - Exports: Click Export XLSX to download spreadsheet for HR.
-  - Editing: Admin can edit IN/OUT times via modal using Admin Key (6508 by default).
-  - Design: Animated gradient background + glassmorphism + cards.
-  -->
+    let users = JSON.parse(localStorage.getItem("users")) || [];
+    if (users.find(u => u.email === email)) {
+      alert("User already exists.");
+      return;
+    }
+
+    users.push({ name, email, pass });
+    localStorage.setItem("users", JSON.stringify(users));
+    alert("User registered successfully!");
+  }
+
+  function showDashboard() {
+    document.getElementById("auth").classList.add("hidden");
+    document.getElementById("dashboard").classList.remove("hidden");
+    loadAttendance();
+  }
+
+  function logout() {
+    currentUser = null;
+    document.getElementById("auth").classList.remove("hidden");
+    document.getElementById("dashboard").classList.add("hidden");
+  }
+
+  function markAttendance() {
+    if (!currentUser) return;
+    let today = new Date().toLocaleDateString();
+    if (!attendance.find(a => a.date === today && a.email === currentUser.email)) {
+      attendance.push({ email: currentUser.email, date: today, status: "Present" });
+      localStorage.setItem("attendance", JSON.stringify(attendance));
+      loadAttendance();
+      alert("Attendance marked!");
+    } else {
+      alert("Already marked for today.");
+    }
+  }
+
+  function loadAttendance() {
+    let tbody = document.querySelector("#attendanceTable tbody");
+    tbody.innerHTML = "";
+    attendance
+      .filter(a => a.email === currentUser.email)
+      .forEach(a => {
+        let row = `<tr><td>${a.date}</td><td>${a.status}</td></tr>`;
+        tbody.innerHTML += row;
+      });
+  }
+</script>
 </body>
 </html>
