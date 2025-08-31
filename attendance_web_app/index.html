@@ -26,10 +26,7 @@
       padding: 20px;
       margin-bottom: 20px;
     }
-    h2 {
-      margin-top: 0;
-      color: #0f172a;
-    }
+    h2 { color: #0f172a; }
     table {
       width: 100%;
       border-collapse: collapse;
@@ -60,10 +57,14 @@
       background: #f1f5f9;
       font-weight: bold;
     }
-    input {
+    input, select {
       padding: 6px;
       border-radius: 6px;
       border: 1px solid #ccc;
+    }
+    #loginCard {
+      max-width: 400px;
+      margin: 50px auto;
     }
   </style>
 </head>
@@ -73,34 +74,64 @@
 </header>
 
 <div class="container">
-  <div class="card">
-    <h2>Mark Attendance</h2>
-    <table id="attendanceTable">
-      <thead>
-        <tr>
-          <th>Staff Name</th>
-          <th>Status (Present/Absent)</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-    <button onclick="saveAttendance()">Save Attendance</button>
+  <!-- Login Section -->
+  <div class="card" id="loginCard">
+    <h2>Login</h2>
+    <label>Username:</label><br>
+    <input type="text" id="loginUser"><br><br>
+    <label>Password:</label><br>
+    <input type="password" id="loginPass"><br><br>
+    <button onclick="login()">Login</button>
+    <p id="loginMsg" style="color:red;"></p>
   </div>
 
-  <div class="card">
-    <h2>Advance Payment</h2>
-    <label>Staff: </label>
-    <select id="advanceStaff"></select>
-    <label>Amount: </label>
-    <input type="number" id="advanceAmount">
-    <button onclick="addAdvance()">Add Advance</button>
+  <!-- Admin Section -->
+  <div id="adminSection" style="display:none;">
+    <div class="card">
+      <h2>Mark Attendance</h2>
+      <table id="attendanceTable">
+        <thead>
+          <tr>
+            <th>Staff Name</th>
+            <th>Status (Present/Absent)</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <button onclick="saveAttendance()">Save Attendance</button>
+    </div>
+
+    <div class="card">
+      <h2>Advance Payment</h2>
+      <label>Staff: </label>
+      <select id="advanceStaff"></select>
+      <label>Amount: </label>
+      <input type="number" id="advanceAmount">
+      <button onclick="addAdvance()">Add Advance</button>
+    </div>
+
+    <div class="card">
+      <h2>Reports</h2>
+      <button onclick="downloadDaily()">Download Daily Report</button>
+      <button onclick="downloadMonthly()">Download Monthly Report</button>
+    </div>
   </div>
 
-  <div class="card">
-    <h2>Reports</h2>
-    <button onclick="downloadDaily()">Download Daily Report</button>
-    <button onclick="downloadMonthly()">Download Monthly Report</button>
-    <div id="reportArea"></div>
+  <!-- Staff Section -->
+  <div id="staffSection" style="display:none;">
+    <div class="card">
+      <h2>Mark Attendance</h2>
+      <table id="staffAttendanceTable">
+        <thead>
+          <tr>
+            <th>Staff Name</th>
+            <th>Status (Present/Absent)</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <button onclick="saveAttendance()">Save Attendance</button>
+    </div>
   </div>
 </div>
 
@@ -114,27 +145,58 @@
   let attendanceData = JSON.parse(localStorage.getItem("attendanceData")) || [];
   let advanceData = JSON.parse(localStorage.getItem("advanceData")) || [];
 
-  const tbody = document.querySelector("#attendanceTable tbody");
+  const adminSection = document.getElementById("adminSection");
+  const staffSection = document.getElementById("staffSection");
+  const loginCard = document.getElementById("loginCard");
   const advanceStaff = document.getElementById("advanceStaff");
-  
-  // Populate staff list
-  staffList.forEach(staff=>{
-    let row = `<tr>
-                <td>${staff}</td>
-                <td>
-                  <select id="att_${staff}">
-                    <option value="Present">Present</option>
-                    <option value="Absent">Absent</option>
-                  </select>
-                </td>
-              </tr>`;
-    tbody.innerHTML += row;
 
+  // Populate Staff Dropdown for Advance
+  staffList.forEach(staff=>{
     let opt = document.createElement("option");
     opt.value = staff; opt.textContent = staff;
     advanceStaff.appendChild(opt);
   });
 
+  // Login Function
+  function login(){
+    let user = document.getElementById("loginUser").value.trim();
+    let pass = document.getElementById("loginPass").value.trim();
+    let msg = document.getElementById("loginMsg");
+
+    if(user==="anandjoshi@123" && pass==="6508"){
+      loginCard.style.display="none";
+      adminSection.style.display="block";
+      loadAttendanceTable("attendanceTable");
+    }
+    else if(user==="anand@123" && pass==="1515"){
+      loginCard.style.display="none";
+      staffSection.style.display="block";
+      loadAttendanceTable("staffAttendanceTable");
+    }
+    else {
+      msg.textContent = "Invalid username or password!";
+    }
+  }
+
+  // Load Attendance Table
+  function loadAttendanceTable(tableId){
+    const tbody = document.querySelector("#"+tableId+" tbody");
+    tbody.innerHTML = "";
+    staffList.forEach(staff=>{
+      let row = `<tr>
+                  <td>${staff}</td>
+                  <td>
+                    <select id="att_${staff}">
+                      <option value="Present">Present</option>
+                      <option value="Absent">Absent</option>
+                    </select>
+                  </td>
+                </tr>`;
+      tbody.innerHTML += row;
+    });
+  }
+
+  // Save Attendance
   function saveAttendance() {
     let today = new Date().toLocaleDateString();
     staffList.forEach(staff=>{
@@ -145,6 +207,7 @@
     alert("Attendance saved!");
   }
 
+  // Add Advance
   function addAdvance() {
     let staff = document.getElementById("advanceStaff").value;
     let amount = parseFloat(document.getElementById("advanceAmount").value);
@@ -155,6 +218,7 @@
     alert("Advance added!");
   }
 
+  // Download Daily Report
   function downloadDaily() {
     let today = new Date().toLocaleDateString();
     let dailyAttendance = attendanceData.filter(r=>r.date===today);
@@ -171,6 +235,7 @@
     doc.save("Daily_Report_"+today+".pdf");
   }
 
+  // Download Monthly Report
   function downloadMonthly() {
     let month = new Date().getMonth();
     let monthlyAttendance = attendanceData.filter(r=> new Date(r.date).getMonth()===month);
