@@ -7,200 +7,197 @@
   <style>
     body {
       font-family: Arial, sans-serif;
-      background: #121212;
-      color: #f1f1f1;
+      background: #1e1e1e;
+      color: #fff;
       margin: 0;
       padding: 0;
     }
-    .login-box, .tracker {
-      max-width: 900px;
-      margin: 50px auto;
-      background: #1e1e1e;
-      padding: 25px;
-      border-radius: 12px;
-      box-shadow: 0 0 12px rgba(0,0,0,0.6);
-    }
-    h2, h3 {
+    h1 {
       text-align: center;
-      margin-bottom: 20px;
-      color: #ff9800;
+      padding: 15px;
+      background: #333;
+      margin: 0;
     }
-    input, select {
-      padding: 6px;
-      border-radius: 5px;
-      border: none;
-      margin: 3px;
+    .container {
+      width: 95%;
+      margin: 20px auto;
+      background: #2b2b2b;
+      padding: 20px;
+      border-radius: 10px;
     }
     table {
       width: 100%;
       border-collapse: collapse;
       margin-top: 15px;
     }
-    table th, table td {
-      padding: 10px;
-      border: 1px solid #444;
+    th, td {
+      border: 1px solid #555;
+      padding: 8px;
       text-align: center;
     }
-    table th {
-      background: #333;
-      color: #ff9800;
+    th {
+      background: #444;
     }
-    button {
-      padding: 8px 14px;
-      margin: 8px;
-      border: none;
-      border-radius: 6px;
-      background: #ff9800;
+    input, select {
+      padding: 5px;
+      background: #111;
       color: #fff;
-      font-weight: bold;
-      cursor: pointer;
+      border: 1px solid #666;
+      border-radius: 5px;
     }
-    button:hover {
-      background: #e68900;
+    .btn {
+      padding: 10px 15px;
+      background: #ff9800;
+      color: #000;
+      font-weight: bold;
+      border: none;
+      cursor: pointer;
+      border-radius: 5px;
+      margin: 5px;
+    }
+    .btn:hover {
+      background: #ffa733;
     }
     .footer {
       text-align: center;
-      margin: 20px;
-      font-size: 13px;
-      color: #bbb;
+      padding: 10px;
+      background: #333;
+      margin-top: 20px;
     }
   </style>
 </head>
 <body>
+  <h1>📋 Staff Attendance Tracker</h1>
+  <div class="container">
 
-<div class="login-box" id="loginBox">
-  <h2>Admin Login</h2>
-  <input type="password" id="adminPass" placeholder="Enter 4-digit Password"><br><br>
-  <button onclick="adminLogin()">Login</button>
-  <p id="loginError" style="color:red;text-align:center;"></p>
-</div>
+    <label><b>Filter by Date:</b></label>
+    <input type="date" id="filterDate" onchange="filterByDate()">
 
-<div class="tracker" id="trackerBox" style="display:none;">
-  <h2>📋 Staff Attendance Tracker</h2>
-  <table id="attendanceTable">
-    <thead>
-      <tr>
-        <th>Date</th>
-        <th>Day</th>
-        <th>Name</th>
-        <th>Time In</th>
-        <th>Time Out</th>
-        <th>Total Hours</th>
-      </tr>
-    </thead>
-    <tbody id="tableBody"></tbody>
-  </table>
-  <div style="text-align:center;">
-    <button onclick="saveData()">💾 Save</button>
-    <button onclick="downloadPDF('daily')">📅 Daily Report</button>
-    <button onclick="downloadPDF('monthly')">🗓 Monthly Report</button>
-    <button onclick="downloadPDF('all')">📑 All Data</button>
-  </div>
-</div>
-
-<div class="footer">Made by Anand Joshi</div>
-
-<script>
-  const staffList = ["Anand", "Uttam", "Sunil", "Pravin", "Manoj", "Rohit", "Alpesh"];
-
-  function adminLogin() {
-    let pass = document.getElementById("adminPass").value;
-    if(pass === "6508") {
-      document.getElementById("loginBox").style.display = "none";
-      document.getElementById("trackerBox").style.display = "block";
-      loadTable();
-    } else {
-      document.getElementById("loginError").innerText = "Invalid Password!";
-    }
-  }
-
-  function getToday() {
-    let today = new Date();
-    return today.toISOString().split("T")[0];
-  }
-
-  function getDay(dateStr) {
-    let date = new Date(dateStr);
-    return date.toLocaleDateString("en-US", { weekday: "long" });
-  }
-
-  function loadTable() {
-    let today = getToday();
-    let saved = JSON.parse(localStorage.getItem("attendanceData") || "{}");
-    if(!saved[today]) {
-      saved[today] = staffList.map(n => ({date: today, name: n, in:"", out:"", total:""}));
-      localStorage.setItem("attendanceData", JSON.stringify(saved));
-    }
-
-    let tbody = document.getElementById("tableBody");
-    tbody.innerHTML = "";
-    saved[today].forEach((row, i) => {
-      tbody.innerHTML += `
+    <table id="attendanceTable">
+      <thead>
         <tr>
-          <td>${row.date}</td>
-          <td>${getDay(row.date)}</td>
-          <td>${row.name}</td>
-          <td><input type="time" value="${row.in}" onchange="updateTime(${i},'in',this.value)"></td>
-          <td><input type="time" value="${row.out}" onchange="updateTime(${i},'out',this.value)"></td>
-          <td><input type="text" value="${row.total}" readonly></td>
-        </tr>`;
-    });
-  }
+          <th>Date</th>
+          <th>Day</th>
+          <th>Name</th>
+          <th>Time In</th>
+          <th>Time Out</th>
+          <th>Total Hours</th>
+        </tr>
+      </thead>
+      <tbody id="attendanceBody">
+        <!-- Rows will be added dynamically -->
+      </tbody>
+    </table>
 
-  function updateTime(index, type, value) {
-    let today = getToday();
-    let saved = JSON.parse(localStorage.getItem("attendanceData") || "{}");
-    saved[today][index][type] = value;
+    <button class="btn" onclick="savePDF('daily')">💾 Save Daily Report</button>
+    <button class="btn" onclick="savePDF('monthly')">💾 Save Monthly Report</button>
+  </div>
 
-    if(saved[today][index].in && saved[today][index].out) {
-      let diff = (new Date(`2000-01-01T${saved[today][index].out}`) - new Date(`2000-01-01T${saved[today][index].in}`)) / (1000*60*60);
-      if(diff < 0) diff += 24;
-      let hrs = Math.floor(diff);
-      let mins = Math.round((diff-hrs)*60);
-      saved[today][index].total = `${hrs}:${mins.toString().padStart(2,'0')}`;
-    }
-    localStorage.setItem("attendanceData", JSON.stringify(saved));
-    loadTable();
-  }
+  <div class="footer">Made by Anand Joshi</div>
 
-  function saveData() {
-    alert("Data saved successfully!");
-  }
+  <script>
+    const staffNames = [
+      "Anand","Uttam","Sunil","Pravin","Rohit",
+      "Alpesh","Raj","Piyush","Vishwa"
+    ];
 
-  function downloadPDF(type) {
-    let saved = JSON.parse(localStorage.getItem("attendanceData") || "{}");
-    let { jsPDF } = window.jspdf;
-    let doc = new jsPDF();
-    doc.setFontSize(14);
-    doc.text("Staff Attendance Report", 70, 15);
-    doc.setFontSize(11);
+    const tableBody = document.getElementById("attendanceBody");
+    const today = new Date().toISOString().split("T")[0];
 
-    let y = 30;
-    let entries = [];
+    function createRows() {
+      tableBody.innerHTML = "";
+      staffNames.forEach(name => {
+        const tr = document.createElement("tr");
 
-    if(type === "daily") {
-      entries = saved[getToday()] || [];
-      doc.text(`Date: ${getToday()}`, 14, 25);
-    } else if(type === "monthly") {
-      let month = getToday().slice(0,7);
-      Object.values(saved).forEach(rows => {
-        if(rows[0].date.startsWith(month)) entries.push(...rows);
+        // Date
+        const tdDate = document.createElement("td");
+        tdDate.textContent = today;
+        tr.appendChild(tdDate);
+
+        // Day
+        const tdDay = document.createElement("td");
+        tdDay.textContent = new Date().toLocaleDateString("en-US",{weekday:"long"});
+        tr.appendChild(tdDay);
+
+        // Name
+        const tdName = document.createElement("td");
+        tdName.textContent = name;
+        tr.appendChild(tdName);
+
+        // Time In
+        const tdIn = document.createElement("td");
+        const timeIn = document.createElement("input");
+        timeIn.type = "time";
+        timeIn.onchange = calcHours;
+        tdIn.appendChild(timeIn);
+        tr.appendChild(tdIn);
+
+        // Time Out
+        const tdOut = document.createElement("td");
+        const timeOut = document.createElement("input");
+        timeOut.type = "time";
+        timeOut.onchange = calcHours;
+        tdOut.appendChild(timeOut);
+        tr.appendChild(tdOut);
+
+        // Total Hours
+        const tdTotal = document.createElement("td");
+        tdTotal.className = "total";
+        tdTotal.textContent = "--:--";
+        tr.appendChild(tdTotal);
+
+        tableBody.appendChild(tr);
       });
-      doc.text(`Month: ${month}`, 14, 25);
-    } else {
-      Object.values(saved).forEach(rows => entries.push(...rows));
-      doc.text("All Records", 14, 25);
     }
 
-    entries.forEach(r => {
-      doc.text(`${r.date} | ${getDay(r.date)} | ${r.name} | In: ${r.in} | Out: ${r.out} | Hrs: ${r.total}`, 14, y);
-      y += 8;
-      if(y > 280) { doc.addPage(); y = 20; }
-    });
+    function calcHours() {
+      const rows = tableBody.querySelectorAll("tr");
+      rows.forEach(row => {
+        const timeIn = row.cells[3].querySelector("input").value;
+        const timeOut = row.cells[4].querySelector("input").value;
+        const tdTotal = row.cells[5];
 
-    doc.save(`${type}_attendance.pdf`);
-  }
-</script>
+        if (timeIn && timeOut) {
+          const [h1,m1] = timeIn.split(":").map(Number);
+          const [h2,m2] = timeOut.split(":").map(Number);
+          let start = h1*60+m1;
+          let end = h2*60+m2;
+          let diff = end-start;
+          if(diff<0) diff += 24*60;
+          const hours = String(Math.floor(diff/60)).padStart(2,"0");
+          const mins = String(diff%60).padStart(2,"0");
+          tdTotal.textContent = `${hours}:${mins}`;
+        }
+      });
+    }
 
+    function filterByDate() {
+      const selected = document.getElementById("filterDate").value;
+      const rows = tableBody.querySelectorAll("tr");
+      rows.forEach(row=>{
+        row.style.display = (row.cells[0].textContent===selected || selected==="") ? "" : "none";
+      });
+    }
+
+    function savePDF(type) {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      let title = type==="daily" ? "Daily Attendance Report" : "Monthly Attendance Report";
+      doc.setFontSize(16);
+      doc.text(title, 10, 10);
+
+      let y = 20;
+      const rows = tableBody.querySelectorAll("tr");
+      rows.forEach(row=>{
+        let rowText = [...row.cells].map(c=>c.textContent).join(" | ");
+        doc.text(rowText, 10, y);
+        y+=8;
+      });
+
+      doc.save(`${title}.pdf`);
+    }
+
+    createRows();
+  </script>
 </body>
 </html>
