@@ -6,217 +6,149 @@
   <title>Staff Attendance Tracker</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0; padding: 0;
-      background: linear-gradient(135deg, #667eea, #764ba2);
-      color: #333;
-    }
-    header {
-      background: #4c51bf; color: white;
-      padding: 15px; text-align: center;
-      font-size: 22px; font-weight: bold;
-    }
-    .container {
-      max-width: 1000px; margin: auto; padding: 20px;
-    }
-    .card {
-      background: white; border-radius: 12px;
-      padding: 20px; margin: 20px 0;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-    }
-    input, button, select {
-      padding: 10px; margin: 5px 0;
-      border-radius: 8px; border: 1px solid #ccc;
-      width: 100%;
-    }
-    button {
-      background: #4c51bf; color: white;
-      font-weight: bold; cursor: pointer;
-      transition: 0.3s;
-    }
-    button:hover { background: #2b2f77; }
-    table {
-      width: 100%; border-collapse: collapse; margin-top: 10px;
-    }
-    table, th, td {
-      border: 1px solid #ddd; text-align: center;
-    }
-    th, td {
-      padding: 8px;
-    }
-    footer {
-      text-align: center; padding: 10px; color: white;
-      background: #2b2f77; position: fixed; bottom: 0; width: 100%;
-    }
-    .hidden { display: none; }
+    body { font-family: Arial, sans-serif; background: linear-gradient(135deg,#4facfe,#00f2fe); margin:0; padding:0; color:#333; }
+    .container { max-width:500px; margin:40px auto; background:#fff; padding:20px; border-radius:15px; box-shadow:0 4px 12px rgba(0,0,0,0.2); }
+    h2 { text-align:center; margin-bottom:20px; color:#222; }
+    input,select,button { width:100%; padding:10px; margin:8px 0; border:1px solid #ccc; border-radius:10px; font-size:16px; }
+    button { background:#4facfe; color:white; border:none; cursor:pointer; font-weight:bold; }
+    button:hover { background:#00c6fb; }
+    .hidden { display:none; }
+    table { width:100%; border-collapse:collapse; margin:15px 0; }
+    th,td { border:1px solid #ddd; padding:8px; text-align:center; }
+    th { background:#4facfe; color:white; }
+    .footer { text-align:center; padding:15px; font-size:14px; color:#fff; }
   </style>
 </head>
 <body>
 
-<header>📊 Staff Attendance Tracker</header>
-
-<div class="container">
-
-  <!-- Login Screen -->
-  <div id="loginCard" class="card">
-    <h2>🔐 Login</h2>
-    <input type="text" id="loginId" placeholder="Enter ID">
-    <input type="password" id="loginPass" placeholder="Enter Password">
-    <button onclick="login()">Login</button>
-    <p id="loginMsg" style="color:red;"></p>
-  </div>
-
-  <!-- Admin Panel -->
-  <div id="adminPanel" class="card hidden">
-    <h2>👨‍💼 Admin Dashboard</h2>
-    <h3>Staff List & Attendance</h3>
-    <table id="attendanceTable">
-      <thead>
-        <tr>
-          <th>Name</th><th>Status</th><th>Time In</th><th>Time Out</th><th>Advance</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-    <br>
-    <button onclick="downloadReport('daily')">📅 Download Daily Report</button>
-    <button onclick="downloadReport('monthly')">🗓️ Download Monthly Report</button>
-  </div>
-
-  <!-- Staff Panel -->
-  <div id="staffPanel" class="card hidden">
-    <h2>🙋 Staff Attendance</h2>
-    <p id="staffName"></p>
-    <button onclick="markAttendance('Present')">✅ Mark Present</button>
-    <button onclick="markAttendance('Absent')">❌ Mark Absent</button>
-    <button onclick="markAttendance('Logout')">🚪 Logout / Day End</button>
-    <table id="staffTable">
-      <thead>
-        <tr><th>Date</th><th>Status</th><th>In</th><th>Out</th></tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-  </div>
+<div class="container" id="loginBox">
+  <h2>Login</h2>
+  <input type="text" id="loginId" placeholder="Enter ID">
+  <input type="password" id="loginPass" placeholder="Enter Password">
+  <button onclick="login()">Login</button>
 </div>
 
-<footer>Made by Anand Joshi</footer>
+<!-- Admin Panel -->
+<div class="container hidden" id="adminPanel">
+  <h2>Admin Dashboard</h2>
+  <h3>Staff Attendance</h3>
+  <table id="attendanceTable">
+    <thead>
+      <tr><th>Name</th><th>Date</th><th>Status</th><th>In</th><th>Out</th><th>Advance</th></tr>
+    </thead>
+    <tbody id="attendanceBody"></tbody>
+  </table>
+  <h3>Mark Attendance</h3>
+  <select id="staffSelect"></select>
+  <select id="statusSelect">
+    <option value="Present">Present</option>
+    <option value="Absent">Absent</option>
+  </select>
+  <input type="number" id="advanceInput" placeholder="Advance (if any)">
+  <button onclick="markAttendance(true)">Save Attendance</button>
+  <hr>
+  <button onclick="downloadReport('daily')">Download Daily Report</button>
+  <button onclick="downloadReport('monthly')">Download Monthly Report</button>
+  <button onclick="logout()">Logout</button>
+</div>
+
+<!-- Staff Panel -->
+<div class="container hidden" id="staffPanel">
+  <h2>Staff Panel</h2>
+  <p id="staffName"></p>
+  <button onclick="markAttendance(false,'Present')">Mark Present</button>
+  <button onclick="markAttendance(false,'Absent')">Mark Absent</button>
+  <button onclick="logout()">Logout</button>
+</div>
+
+<div class="footer">Made by Anand Joshi</div>
 
 <script>
-  const { jsPDF } = window.jspdf;
+  const staffList = ["Anand","Uttam","Sunil","Pravin","Alpesh","Raj","Piyush","Vishwa"];
+  let attendanceData = JSON.parse(localStorage.getItem("attendanceData") || "[]");
+  let currentUser = null, currentRole = null;
 
-  // Fixed staff list
-  const staffNames = ["Anand", "Uttam", "Sunil", "Pravin", "Alpesh", "Raj", "Piyush", "Vishwa"];
-  let currentUser = null;
-  let attendanceData = JSON.parse(localStorage.getItem("attendanceData")) || {};
-  let advanceData = JSON.parse(localStorage.getItem("advanceData")) || {};
-
-  // Login System
-  function login() {
-    let id = document.getElementById("loginId").value.trim();
-    let pass = document.getElementById("loginPass").value.trim();
-
-    if (id === "anandjoshi@123" && pass === "6508") {
-      currentUser = { role: "admin", name: "Admin" };
-      document.getElementById("loginCard").classList.add("hidden");
-      document.getElementById("adminPanel").classList.remove("hidden");
-      renderAdminTable();
-    }
-    else if (id === "anand@123" && pass === "1515") {
-      currentUser = { role: "staff", name: "Anand" }; // demo staff login
-      document.getElementById("loginCard").classList.add("hidden");
-      document.getElementById("staffPanel").classList.remove("hidden");
-      document.getElementById("staffName").innerText = "Welcome, " + currentUser.name;
-      renderStaffTable(currentUser.name);
-    }
-    else {
-      document.getElementById("loginMsg").innerText = "❌ Invalid credentials!";
-    }
+  function login(){
+    const id=document.getElementById("loginId").value;
+    const pass=document.getElementById("loginPass").value;
+    if(id==="anandjoshi@123" && pass==="6508"){ currentRole="admin"; showAdmin(); }
+    else if(id==="anand@123" && pass==="1515"){ currentRole="staff"; currentUser="Anand"; showStaff(); }
+    else { alert("Invalid Credentials!"); }
   }
 
-  // Admin render table
-  function renderAdminTable() {
-    let tbody = document.querySelector("#attendanceTable tbody");
-    tbody.innerHTML = "";
-    let today = new Date().toLocaleDateString();
+  function showAdmin(){
+    document.getElementById("loginBox").classList.add("hidden");
+    document.getElementById("adminPanel").classList.remove("hidden");
+    loadStaffSelect();
+    renderTable();
+  }
+  function showStaff(){
+    document.getElementById("loginBox").classList.add("hidden");
+    document.getElementById("staffPanel").classList.remove("hidden");
+    document.getElementById("staffName").innerText="Welcome, "+currentUser;
+  }
+  function logout(){ location.reload(); }
 
-    staffNames.forEach(name => {
-      let rec = (attendanceData[today] && attendanceData[today][name]) || {};
-      let adv = advanceData[name] || 0;
+  function loadStaffSelect(){
+    let sel=document.getElementById("staffSelect"); sel.innerHTML="";
+    staffList.forEach(s=>{ let opt=document.createElement("option"); opt.value=s; opt.text=s; sel.appendChild(opt); });
+  }
 
-      let row = `<tr>
-        <td>${name}</td>
-        <td>${rec.status || "-"}</td>
-        <td>${rec.in || "-"}</td>
-        <td>${rec.out || "-"}</td>
-        <td contenteditable onblur="updateAdvance('${name}', this.innerText)">${adv}</td>
-      </tr>`;
-      tbody.innerHTML += row;
+  function markAttendance(isAdmin,statusOverride=null){
+    const today=new Date().toLocaleDateString();
+    let name, status;
+    if(isAdmin){
+      name=document.getElementById("staffSelect").value;
+      status=document.getElementById("statusSelect").value;
+    } else {
+      name=currentUser; status=statusOverride;
+    }
+    let record=attendanceData.find(r=>r.name===name && r.date===today);
+    if(!record){
+      record={name,date:today,status,timeIn:"",timeOut:"",advance:0};
+      attendanceData.push(record);
+    }
+    record.status=status;
+    if(status==="Present"){
+      if(!record.timeIn) record.timeIn=new Date().toLocaleTimeString();
+      else record.timeOut=new Date().toLocaleTimeString();
+    }
+    if(isAdmin){
+      let adv=parseInt(document.getElementById("advanceInput").value||0);
+      if(adv>0) record.advance=adv;
+    }
+    localStorage.setItem("attendanceData",JSON.stringify(attendanceData));
+    if(isAdmin) renderTable();
+    alert("Attendance saved for "+name);
+  }
+
+  function renderTable(){
+    let body=document.getElementById("attendanceBody"); body.innerHTML="";
+    attendanceData.forEach(r=>{
+      let tr=document.createElement("tr");
+      tr.innerHTML=`<td>${r.name}</td><td>${r.date}</td><td>${r.status}</td><td>${r.timeIn}</td><td>${r.timeOut}</td><td>${r.advance}</td>`;
+      body.appendChild(tr);
     });
   }
 
-  // Staff attendance marking
-  function markAttendance(action) {
-    let today = new Date().toLocaleDateString();
-    if (!attendanceData[today]) attendanceData[today] = {};
-    if (!attendanceData[today][currentUser.name]) attendanceData[today][currentUser.name] = {};
-
-    let rec = attendanceData[today][currentUser.name];
-    if (action === "Present") {
-      rec.status = "Present";
-      rec.in = new Date().toLocaleTimeString();
-    } else if (action === "Absent") {
-      rec.status = "Absent";
-    } else if (action === "Logout") {
-      rec.out = new Date().toLocaleTimeString();
+  function downloadReport(type){
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    doc.setFontSize(14);
+    doc.text("Staff Attendance Report ("+type+")",20,20);
+    let filtered=attendanceData;
+    const today=new Date().toLocaleDateString();
+    if(type==="daily"){ filtered=attendanceData.filter(r=>r.date===today); }
+    else {
+      let month=new Date().getMonth();
+      filtered=attendanceData.filter(r=>new Date(r.date).getMonth()===month);
     }
-
-    localStorage.setItem("attendanceData", JSON.stringify(attendanceData));
-    renderStaffTable(currentUser.name);
-    if (currentUser.role === "admin") renderAdminTable();
-  }
-
-  // Render staff table
-  function renderStaffTable(name) {
-    let tbody = document.querySelector("#staffTable tbody");
-    tbody.innerHTML = "";
-    for (let date in attendanceData) {
-      if (attendanceData[date][name]) {
-        let rec = attendanceData[date][name];
-        let row = `<tr>
-          <td>${date}</td>
-          <td>${rec.status || "-"}</td>
-          <td>${rec.in || "-"}</td>
-          <td>${rec.out || "-"}</td>
-        </tr>`;
-        tbody.innerHTML += row;
-      }
-    }
-  }
-
-  // Update advance money
-  function updateAdvance(name, val) {
-    advanceData[name] = val;
-    localStorage.setItem("advanceData", JSON.stringify(advanceData));
-  }
-
-  // Download Reports
-  function downloadReport(type) {
-    let doc = new jsPDF();
-    doc.text("Staff Attendance Report ("+type+")", 20, 20);
-    let y = 40;
-
-    for (let date in attendanceData) {
-      if (type === "daily" && date !== new Date().toLocaleDateString()) continue;
-      doc.text("Date: " + date, 20, y); y+=10;
-      staffNames.forEach(n => {
-        let rec = (attendanceData[date] && attendanceData[date][n]) || {};
-        doc.text(`${n} - ${rec.status || "-"} | In: ${rec.in || "-"} | Out: ${rec.out || "-"} | Adv: ${advanceData[n] || 0}`, 25, y);
-        y+=8;
-      });
-      y+=5;
-    }
-    doc.save(type+"_report.pdf");
+    let y=40;
+    filtered.forEach(r=>{
+      doc.text(`${r.date} | ${r.name} | ${r.status} | In: ${r.timeIn} | Out: ${r.timeOut} | Adv: ${r.advance}`,20,y);
+      y+=10;
+    });
+    doc.save(`${type}_report.pdf`);
   }
 </script>
 </body>
