@@ -38,7 +38,7 @@
     th {
       background: #444;
     }
-    input, select {
+    input {
       padding: 5px;
       background: #111;
       color: #fff;
@@ -84,9 +84,7 @@
           <th>Total Hours</th>
         </tr>
       </thead>
-      <tbody id="attendanceBody">
-        <!-- Rows will be added dynamically -->
-      </tbody>
+      <tbody id="attendanceBody"></tbody>
     </table>
 
     <button class="btn" onclick="savePDF('daily')">💾 Save Daily Report</button>
@@ -128,7 +126,7 @@
         const tdIn = document.createElement("td");
         const timeIn = document.createElement("input");
         timeIn.type = "time";
-        timeIn.onchange = calcHours;
+        timeIn.addEventListener("input", ()=>calcHours(tr));
         tdIn.appendChild(timeIn);
         tr.appendChild(tdIn);
 
@@ -136,7 +134,7 @@
         const tdOut = document.createElement("td");
         const timeOut = document.createElement("input");
         timeOut.type = "time";
-        timeOut.onchange = calcHours;
+        timeOut.addEventListener("input", ()=>calcHours(tr));
         tdOut.appendChild(timeOut);
         tr.appendChild(tdOut);
 
@@ -150,25 +148,25 @@
       });
     }
 
-    function calcHours() {
-      const rows = tableBody.querySelectorAll("tr");
-      rows.forEach(row => {
-        const timeIn = row.cells[3].querySelector("input").value;
-        const timeOut = row.cells[4].querySelector("input").value;
-        const tdTotal = row.cells[5];
+    // 🔹 total hours calculation (fix)
+    function calcHours(row) {
+      const timeIn = row.cells[3].querySelector("input").value;
+      const timeOut = row.cells[4].querySelector("input").value;
+      const tdTotal = row.cells[5];
 
-        if (timeIn && timeOut) {
-          const [h1,m1] = timeIn.split(":").map(Number);
-          const [h2,m2] = timeOut.split(":").map(Number);
-          let start = h1*60+m1;
-          let end = h2*60+m2;
-          let diff = end-start;
-          if(diff<0) diff += 24*60;
-          const hours = String(Math.floor(diff/60)).padStart(2,"0");
-          const mins = String(diff%60).padStart(2,"0");
-          tdTotal.textContent = `${hours}:${mins}`;
-        }
-      });
+      if (timeIn && timeOut) {
+        const [h1,m1] = timeIn.split(":").map(Number);
+        const [h2,m2] = timeOut.split(":").map(Number);
+        let start = h1*60+m1;
+        let end = h2*60+m2;
+        let diff = end-start;
+        if(diff<0) diff += 24*60; // handle midnight case
+        const hours = String(Math.floor(diff/60)).padStart(2,"0");
+        const mins = String(diff%60).padStart(2,"0");
+        tdTotal.textContent = `${hours}:${mins}`;
+      } else {
+        tdTotal.textContent = "--:--";
+      }
     }
 
     function filterByDate() {
@@ -189,15 +187,194 @@
       let y = 20;
       const rows = tableBody.querySelectorAll("tr");
       rows.forEach(row=>{
-        let rowText = [...row.cells].map(c=>c.textContent).join(" | ");
-        doc.text(rowText, 10, y);
-        y+=8;
-      });
+        let rowText = [...row.cells].map(c=>c.t
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Staff Attendance Tracker</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #1e1e1e;
+      color: #fff;
+      margin: 0;
+      padding: 0;
+    }
+    h1 {
+      text-align: center;
+      padding: 15px;
+      background: #333;
+      margin: 0;
+    }
+    .container {
+      width: 95%;
+      margin: 20px auto;
+      background: #2b2b2b;
+      padding: 20px;
+      border-radius: 10px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+    }
+    th, td {
+      border: 1px solid #555;
+      padding: 8px;
+      text-align: center;
+    }
+    th {
+      background: #444;
+    }
+    input {
+      padding: 5px;
+      background: #111;
+      color: #fff;
+      border: 1px solid #666;
+      border-radius: 5px;
+    }
+    .btn {
+      padding: 10px 15px;
+      background: #ff9800;
+      color: #000;
+      font-weight: bold;
+      border: none;
+      cursor: pointer;
+      border-radius: 5px;
+      margin: 5px;
+    }
+    .btn:hover {
+      background: #ffa733;
+    }
+    .footer {
+      text-align: center;
+      padding: 10px;
+      background: #333;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h1>📋 Staff Attendance Tracker</h1>
+  <div class="container">
 
-      doc.save(`${title}.pdf`);
+    <label><b>Filter by Date:</b></label>
+    <input type="date" id="filterDate" onchange="filterByDate()">
+
+    <table id="attendanceTable">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Day</th>
+          <th>Name</th>
+          <th>Time In</th>
+          <th>Time Out</th>
+          <th>Total Hours</th>
+        </tr>
+      </thead>
+      <tbody id="attendanceBody"></tbody>
+    </table>
+
+    <button class="btn" onclick="savePDF('daily')">💾 Save Daily Report</button>
+    <button class="btn" onclick="savePDF('monthly')">💾 Save Monthly Report</button>
+  </div>
+
+  <div class="footer">Made by Anand Joshi</div>
+
+  <script>
+    const staffNames = [
+      "Anand","Uttam","Sunil","Pravin","Rohit",
+      "Alpesh","Raj","Piyush","Vishwa"
+    ];
+
+    const tableBody = document.getElementById("attendanceBody");
+    const today = new Date().toISOString().split("T")[0];
+
+    function createRows() {
+      tableBody.innerHTML = "";
+      staffNames.forEach(name => {
+        const tr = document.createElement("tr");
+
+        // Date
+        const tdDate = document.createElement("td");
+        tdDate.textContent = today;
+        tr.appendChild(tdDate);
+
+        // Day
+        const tdDay = document.createElement("td");
+        tdDay.textContent = new Date().toLocaleDateString("en-US",{weekday:"long"});
+        tr.appendChild(tdDay);
+
+        // Name
+        const tdName = document.createElement("td");
+        tdName.textContent = name;
+        tr.appendChild(tdName);
+
+        // Time In
+        const tdIn = document.createElement("td");
+        const timeIn = document.createElement("input");
+        timeIn.type = "time";
+        timeIn.addEventListener("input", ()=>calcHours(tr));
+        tdIn.appendChild(timeIn);
+        tr.appendChild(tdIn);
+
+        // Time Out
+        const tdOut = document.createElement("td");
+        const timeOut = document.createElement("input");
+        timeOut.type = "time";
+        timeOut.addEventListener("input", ()=>calcHours(tr));
+        tdOut.appendChild(timeOut);
+        tr.appendChild(tdOut);
+
+        // Total Hours
+        const tdTotal = document.createElement("td");
+        tdTotal.className = "total";
+        tdTotal.textContent = "--:--";
+        tr.appendChild(tdTotal);
+
+        tableBody.appendChild(tr);
+      });
     }
 
-    createRows();
-  </script>
-</body>
-</html>
+    // 🔹 total hours calculation (fix)
+    function calcHours(row) {
+      const timeIn = row.cells[3].querySelector("input").value;
+      const timeOut = row.cells[4].querySelector("input").value;
+      const tdTotal = row.cells[5];
+
+      if (timeIn && timeOut) {
+        const [h1,m1] = timeIn.split(":").map(Number);
+        const [h2,m2] = timeOut.split(":").map(Number);
+        let start = h1*60+m1;
+        let end = h2*60+m2;
+        let diff = end-start;
+        if(diff<0) diff += 24*60; // handle midnight case
+        const hours = String(Math.floor(diff/60)).padStart(2,"0");
+        const mins = String(diff%60).padStart(2,"0");
+        tdTotal.textContent = `${hours}:${mins}`;
+      } else {
+        tdTotal.textContent = "--:--";
+      }
+    }
+
+    function filterByDate() {
+      const selected = document.getElementById("filterDate").value;
+      const rows = tableBody.querySelectorAll("tr");
+      rows.forEach(row=>{
+        row.style.display = (row.cells[0].textContent===selected || selected==="") ? "" : "none";
+      });
+    }
+
+    function savePDF(type) {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      let title = type==="daily" ? "Daily Attendance Report" : "Monthly Attendance Report";
+      doc.setFontSize(16);
+      doc.text(title, 10, 10);
+
+      let y = 20;
+      const rows = tableBody.querySelectorAll("tr");
+      rows.forEach(row=>{
+        let rowText = [...row.cells].map(c=>c.t
