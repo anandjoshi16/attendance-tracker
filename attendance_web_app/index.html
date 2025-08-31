@@ -15,7 +15,7 @@
     .container {
       margin: 40px auto;
       padding: 20px;
-      max-width: 500px;
+      max-width: 700px;
       background: rgba(0,0,0,0.6);
       border-radius: 12px;
     }
@@ -52,14 +52,22 @@
       font-size: 14px;
       color: #eee;
     }
+    .edit-btn {
+      background: #4caf50;
+      color: white;
+      border: none;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
 
   <!-- LOGIN -->
   <div id="loginPage" class="container">
-    <h2>Login</h2>
-    <input type="text" id="loginId" placeholder="Enter ID">
+    <h2>Admin Login</h2>
+    <input type="text" id="loginId" placeholder="Enter Admin ID">
     <input type="password" id="loginPassword" placeholder="Enter Password">
     <button onclick="login()">Login</button>
     <p id="loginError" style="color:red;"></p>
@@ -85,22 +93,7 @@
         <th>Time Out</th>
         <th>Hours</th>
         <th>Advance</th>
-      </tr>
-    </table>
-  </div>
-
-  <!-- STAFF PANEL -->
-  <div id="staffPanel" class="container hidden">
-    <h2>Staff Panel</h2>
-    <p id="staffWelcome"></p>
-    <button onclick="staffMarkIn()">Mark Time In</button>
-    <button onclick="staffMarkOut()">Mark Time Out</button>
-    <table id="staffAttendanceTable">
-      <tr>
-        <th>Date</th>
-        <th>Time In</th>
-        <th>Time Out</th>
-        <th>Hours</th>
+        <th>Edit</th>
       </tr>
     </table>
   </div>
@@ -108,23 +101,20 @@
   <footer>Made by Anand Joshi</footer>
 
   <script>
-    // Fixed Staff list
+    // Staff List
     const staffList = ["Anand", "Uttam", "Sunil", "Pravin", "Alpesh", "Raj", "Piyush", "Vishwa"];
     const attendanceData = JSON.parse(localStorage.getItem("attendanceData")) || [];
 
     const loginPage = document.getElementById("loginPage");
     const adminPanel = document.getElementById("adminPanel");
-    const staffPanel = document.getElementById("staffPanel");
-
     const staffSelect = document.getElementById("staffSelect");
+
     staffList.forEach(name => {
       let opt = document.createElement("option");
       opt.value = name;
       opt.textContent = name;
       staffSelect.appendChild(opt);
     });
-
-    let currentUser = null;
 
     function login() {
       const id = document.getElementById("loginId").value;
@@ -134,12 +124,6 @@
         loginPage.classList.add("hidden");
         adminPanel.classList.remove("hidden");
         renderAttendanceTable();
-      } else if (id === "anand@123" && pass === "1515") {
-        currentUser = "Anand"; // Example: staff Anand
-        loginPage.classList.add("hidden");
-        staffPanel.classList.remove("hidden");
-        document.getElementById("staffWelcome").innerText = "Welcome, " + currentUser;
-        renderStaffTable();
       } else {
         document.getElementById("loginError").innerText = "Invalid credentials!";
       }
@@ -171,46 +155,31 @@
       const table = document.getElementById("attendanceTable");
       table.innerHTML = `
         <tr>
-          <th>Date</th><th>Staff</th><th>Time In</th><th>Time Out</th><th>Hours</th><th>Advance</th>
+          <th>Date</th><th>Staff</th><th>Time In</th><th>Time Out</th>
+          <th>Hours</th><th>Advance</th><th>Edit</th>
         </tr>`;
-      attendanceData.forEach(r => {
+      attendanceData.forEach((r, index) => {
         table.innerHTML += `<tr>
-          <td>${r.date}</td><td>${r.staff}</td><td>${r.timeIn}</td>
-          <td>${r.timeOut}</td><td>${r.hours}</td><td>${r.advance || 0}</td>
+          <td>${r.date}</td><td>${r.staff}</td>
+          <td>${r.timeIn}</td><td>${r.timeOut}</td>
+          <td>${r.hours}</td><td>${r.advance || 0}</td>
+          <td><button class="edit-btn" onclick="editRecord(${index})">Edit</button></td>
         </tr>`;
       });
     }
 
-    function staffMarkIn() {
-      const today = new Date().toISOString().split("T")[0];
-      const now = new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
-      attendanceData.push({date: today, staff: currentUser, timeIn: now, timeOut: "", hours:"", advance:0});
+    function editRecord(index) {
+      let r = attendanceData[index];
+      document.getElementById("staffSelect").value = r.staff;
+      document.getElementById("dateInput").value = r.date;
+      document.getElementById("timeInInput").value = r.timeIn;
+      document.getElementById("timeOutInput").value = r.timeOut;
+      document.getElementById("advanceInput").value = r.advance;
+
+      // Remove old entry so that edited one will overwrite
+      attendanceData.splice(index, 1);
       localStorage.setItem("attendanceData", JSON.stringify(attendanceData));
-      renderStaffTable();
-    }
-
-    function staffMarkOut() {
-      const today = new Date().toISOString().split("T")[0];
-      let record = attendanceData.find(r => r.date === today && r.staff === currentUser);
-      if (record) {
-        record.timeOut = new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
-        let start = new Date("1970-01-01T" + record.timeIn + ":00");
-        let end = new Date("1970-01-01T" + record.timeOut + ":00");
-        let diff = (end - start) / (1000 * 60 * 60);
-        record.hours = diff.toFixed(2);
-        localStorage.setItem("attendanceData", JSON.stringify(attendanceData));
-        renderStaffTable();
-      }
-    }
-
-    function renderStaffTable() {
-      const table = document.getElementById("staffAttendanceTable");
-      table.innerHTML = `<tr><th>Date</th><th>Time In</th><th>Time Out</th><th>Hours</th></tr>`;
-      attendanceData.filter(r => r.staff === currentUser).forEach(r => {
-        table.innerHTML += `<tr>
-          <td>${r.date}</td><td>${r.timeIn}</td><td>${r.timeOut}</td><td>${r.hours}</td>
-        </tr>`;
-      });
+      renderAttendanceTable();
     }
   </script>
 </body>
