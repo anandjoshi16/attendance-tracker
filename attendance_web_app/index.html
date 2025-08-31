@@ -69,11 +69,21 @@
   let currentUser = null, currentRole = null;
 
   function login(){
-    const id=document.getElementById("loginId").value;
-    const pass=document.getElementById("loginPass").value;
-    if(id==="anandjoshi@123" && pass==="6508"){ currentRole="admin"; showAdmin(); }
-    else if(id==="anand@123" && pass==="1515"){ currentRole="staff"; currentUser="Anand"; showStaff(); }
-    else { alert("Invalid Credentials!"); }
+    const id=document.getElementById("loginId").value.trim();
+    const pass=document.getElementById("loginPass").value.trim();
+
+    if(id==="anandjoshi@123" && pass==="6508"){ 
+      currentRole="admin"; 
+      showAdmin(); 
+    }
+    else if(id==="anand@123" && pass==="1515"){ 
+      currentRole="staff"; 
+      currentUser="Anand"; 
+      showStaff(); 
+    }
+    else { 
+      alert("Invalid Credentials!"); 
+    }
   }
 
   function showAdmin(){
@@ -91,18 +101,29 @@
 
   function loadStaffSelect(){
     let sel=document.getElementById("staffSelect"); sel.innerHTML="";
-    staffList.forEach(s=>{ let opt=document.createElement("option"); opt.value=s; opt.text=s; sel.appendChild(opt); });
+    staffList.forEach(s=>{ 
+      let opt=document.createElement("option"); 
+      opt.value=s; opt.text=s; 
+      sel.appendChild(opt); 
+    });
+  }
+
+  // Utility: always YYYY-MM-DD
+  function getToday(){
+    return new Date().toISOString().split("T")[0];
   }
 
   function markAttendance(isAdmin,statusOverride=null){
-    const today=new Date().toLocaleDateString();
+    const today=getToday();
     let name, status;
     if(isAdmin){
       name=document.getElementById("staffSelect").value;
       status=document.getElementById("statusSelect").value;
     } else {
-      name=currentUser; status=statusOverride;
+      name=currentUser; 
+      status=statusOverride;
     }
+
     let record=attendanceData.find(r=>r.name===name && r.date===today);
     if(!record){
       record={name,date:today,status,timeIn:"",timeOut:"",advance:0};
@@ -136,18 +157,29 @@
     const doc = new jsPDF();
     doc.setFontSize(14);
     doc.text("Staff Attendance Report ("+type+")",20,20);
+
     let filtered=attendanceData;
-    const today=new Date().toLocaleDateString();
-    if(type==="daily"){ filtered=attendanceData.filter(r=>r.date===today); }
-    else {
-      let month=new Date().getMonth();
-      filtered=attendanceData.filter(r=>new Date(r.date).getMonth()===month);
+    const today=getToday();
+
+    if(type==="daily"){ 
+      filtered=attendanceData.filter(r=>r.date===today); 
     }
+    else if(type==="monthly"){ 
+      let month=new Date().getMonth();
+      filtered=attendanceData.filter(r=>{
+        return new Date(r.date).getMonth()===month;
+      });
+    }
+
     let y=40;
-    filtered.forEach(r=>{
-      doc.text(`${r.date} | ${r.name} | ${r.status} | In: ${r.timeIn} | Out: ${r.timeOut} | Adv: ${r.advance}`,20,y);
-      y+=10;
-    });
+    if(filtered.length===0){ 
+      doc.text("No records found.",20,y); 
+    } else {
+      filtered.forEach(r=>{
+        doc.text(`${r.date} | ${r.name} | ${r.status} | In: ${r.timeIn} | Out: ${r.timeOut} | Adv: ${r.advance}`,20,y);
+        y+=10;
+      });
+    }
     doc.save(`${type}_report.pdf`);
   }
 </script>
