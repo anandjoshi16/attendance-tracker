@@ -3,230 +3,188 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Attendance Pro</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <title>Staff Attendance & Advance Tracker</title>
   <style>
     body {
       font-family: Arial, sans-serif;
-      background: linear-gradient(to right, #f8fafc, #e0f2fe);
+      background: linear-gradient(to right, #dfe9f3, #ffffff);
       margin: 0; padding: 0;
     }
+    header {
+      background: #0f172a;
+      color: white;
+      padding: 15px;
+      text-align: center;
+    }
     .container {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
+      padding: 20px;
     }
     .card {
       background: white;
-      padding: 30px;
-      border-radius: 15px;
-      box-shadow: 0px 4px 15px rgba(0,0,0,0.1);
-      margin: 10px;
-      width: 300px;
+      border-radius: 12px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+      padding: 20px;
+      margin-bottom: 20px;
     }
-    input {
-      width: 100%;
-      padding: 10px;
-      margin: 10px 0;
-      border: 1px solid #ddd;
-      border-radius: 8px;
+    h2 {
+      margin-top: 0;
+      color: #0f172a;
     }
-    button {
-      width: 100%;
-      padding: 10px;
-      border: none;
-      border-radius: 8px;
-      background: #0f172a;
-      color: white;
-      font-size: 16px;
-      cursor: pointer;
-      margin-top: 5px;
-    }
-    button:hover { background: #334155; }
-    .hidden { display: none; }
-    #dashboard { padding: 20px; }
     table {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 20px;
-      background: white;
-      border-radius: 10px;
-      overflow: hidden;
+      margin-top: 10px;
     }
     th, td {
       border: 1px solid #ddd;
-      padding: 10px;
+      padding: 8px;
       text-align: center;
     }
     th {
       background: #0f172a;
       color: white;
     }
-    .actions {
-      margin-top: 15px;
-      display: flex;
-      gap: 10px;
+    button {
+      background: #0f172a;
+      color: white;
+      padding: 8px 14px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      margin: 5px;
+    }
+    button:hover { background: #334155; }
+    footer {
+      text-align: center;
+      padding: 15px;
+      background: #f1f5f9;
+      font-weight: bold;
+    }
+    input {
+      padding: 6px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
     }
   </style>
 </head>
 <body>
+<header>
+  <h1>Staff Attendance & Advance Tracker</h1>
+</header>
 
-  <!-- Auth Section -->
-  <div id="auth" class="container">
-    <div class="card">
-      <h2>Login</h2>
-      <input type="email" id="loginEmail" placeholder="Email">
-      <input type="password" id="loginPassword" placeholder="Password">
-      <button onclick="signIn()">Sign In</button>
-    </div>
-
-    <div class="card">
-      <h2>Register</h2>
-      <input type="text" id="regName" placeholder="Full Name">
-      <input type="email" id="regEmail" placeholder="Email">
-      <input type="password" id="regPassword" placeholder="Password">
-      <button onclick="signUp()">Sign Up</button>
-    </div>
-  </div>
-
-  <!-- Dashboard -->
-  <div id="dashboard" class="hidden">
-    <h1>Attendance Dashboard</h1>
-    <button onclick="logout()">Logout</button>
-
+<div class="container">
+  <div class="card">
     <h2>Mark Attendance</h2>
-    <button onclick="markAttendance()">Mark Present</button>
-
-    <h2>Attendance Records</h2>
     <table id="attendanceTable">
       <thead>
         <tr>
-          <th>Name</th>
-          <th>Email</th>
-          <th>Date</th>
-          <th>Status</th>
+          <th>Staff Name</th>
+          <th>Status (Present/Absent)</th>
         </tr>
       </thead>
       <tbody></tbody>
     </table>
-
-    <div class="actions">
-      <button onclick="downloadDailyPDF()">Download Daily PDF</button>
-      <button onclick="downloadMonthlyPDF()">Download Monthly PDF</button>
-      <button onclick="downloadExcel()">Download Excel</button>
-    </div>
+    <button onclick="saveAttendance()">Save Attendance</button>
   </div>
 
+  <div class="card">
+    <h2>Advance Payment</h2>
+    <label>Staff: </label>
+    <select id="advanceStaff"></select>
+    <label>Amount: </label>
+    <input type="number" id="advanceAmount">
+    <button onclick="addAdvance()">Add Advance</button>
+  </div>
+
+  <div class="card">
+    <h2>Reports</h2>
+    <button onclick="downloadDaily()">Download Daily Report</button>
+    <button onclick="downloadMonthly()">Download Monthly Report</button>
+    <div id="reportArea"></div>
+  </div>
+</div>
+
+<footer>
+  Made by Anand Joshi
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
-  let currentUser = null;
-  let attendance = JSON.parse(localStorage.getItem("attendance")) || [];
+  const staffList = ["Anand","Uttam","Sunil","Pravin","Alpesh","Raj","Piyush","Vishwa"];
+  let attendanceData = JSON.parse(localStorage.getItem("attendanceData")) || [];
+  let advanceData = JSON.parse(localStorage.getItem("advanceData")) || [];
 
-  function signIn() {
-    const email = document.getElementById("loginEmail").value;
-    const pass = document.getElementById("loginPassword").value;
+  const tbody = document.querySelector("#attendanceTable tbody");
+  const advanceStaff = document.getElementById("advanceStaff");
+  
+  // Populate staff list
+  staffList.forEach(staff=>{
+    let row = `<tr>
+                <td>${staff}</td>
+                <td>
+                  <select id="att_${staff}">
+                    <option value="Present">Present</option>
+                    <option value="Absent">Absent</option>
+                  </select>
+                </td>
+              </tr>`;
+    tbody.innerHTML += row;
 
-    if (email === "admin@demo.com" && pass === "123456") {
-      currentUser = { name: "Admin", email };
-      showDashboard();
-      alert("Logged in as Admin!");
-      return;
-    }
+    let opt = document.createElement("option");
+    opt.value = staff; opt.textContent = staff;
+    advanceStaff.appendChild(opt);
+  });
 
-    let users = JSON.parse(localStorage.getItem("users")) || [];
-    let found = users.find(u => u.email === email && u.pass === pass);
-    if (found) {
-      currentUser = found;
-      showDashboard();
-      alert("Login successful!");
-    } else {
-      alert("Invalid login details.");
-    }
-  }
-
-  function signUp() {
-    const name = document.getElementById("regName").value;
-    const email = document.getElementById("regEmail").value;
-    const pass = document.getElementById("regPassword").value;
-
-    let users = JSON.parse(localStorage.getItem("users")) || [];
-    if (users.find(u => u.email === email)) {
-      alert("User already exists.");
-      return;
-    }
-
-    users.push({ name, email, pass });
-    localStorage.setItem("users", JSON.stringify(users));
-    alert("User registered successfully!");
-  }
-
-  function showDashboard() {
-    document.getElementById("auth").classList.add("hidden");
-    document.getElementById("dashboard").classList.remove("hidden");
-    loadAttendance();
-  }
-
-  function logout() {
-    currentUser = null;
-    document.getElementById("auth").classList.remove("hidden");
-    document.getElementById("dashboard").classList.add("hidden");
-  }
-
-  function markAttendance() {
-    if (!currentUser) return;
+  function saveAttendance() {
     let today = new Date().toLocaleDateString();
-    if (!attendance.find(a => a.date === today && a.email === currentUser.email)) {
-      attendance.push({ name: currentUser.name, email: currentUser.email, date: today, status: "Present" });
-      localStorage.setItem("attendance", JSON.stringify(attendance));
-      loadAttendance();
-      alert("Attendance marked!");
-    } else {
-      alert("Already marked for today.");
-    }
-  }
-
-  function loadAttendance() {
-    let tbody = document.querySelector("#attendanceTable tbody");
-    tbody.innerHTML = "";
-    let filtered = currentUser.email === "admin@demo.com" ? attendance : attendance.filter(a => a.email === currentUser.email);
-    filtered.forEach(a => {
-      let row = `<tr><td>${a.name}</td><td>${a.email}</td><td>${a.date}</td><td>${a.status}</td></tr>`;
-      tbody.innerHTML += row;
+    staffList.forEach(staff=>{
+      let status = document.getElementById("att_"+staff).value;
+      attendanceData.push({date: today, staff, status});
     });
+    localStorage.setItem("attendanceData", JSON.stringify(attendanceData));
+    alert("Attendance saved!");
   }
 
-  // 📄 PDF + Excel Export
-  function downloadDailyPDF() {
+  function addAdvance() {
+    let staff = document.getElementById("advanceStaff").value;
+    let amount = parseFloat(document.getElementById("advanceAmount").value);
+    if (!amount) return alert("Enter valid amount!");
     let today = new Date().toLocaleDateString();
-    let data = attendance.filter(a => a.date === today);
-    exportPDF(data, `Daily_Report_${today}.pdf`);
+    advanceData.push({date: today, staff, amount});
+    localStorage.setItem("advanceData", JSON.stringify(advanceData));
+    alert("Advance added!");
   }
 
-  function downloadMonthlyPDF() {
-    let month = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
-    let currentMonth = new Date().getMonth();
-    let data = attendance.filter(a => new Date(a.date).getMonth() === currentMonth);
-    exportPDF(data, `Monthly_Report_${month}.pdf`);
+  function downloadDaily() {
+    let today = new Date().toLocaleDateString();
+    let dailyAttendance = attendanceData.filter(r=>r.date===today);
+    let dailyAdvance = advanceData.filter(r=>r.date===today);
+
+    let { jsPDF } = window.jspdf;
+    let doc = new jsPDF();
+    doc.text("Daily Report - "+today, 10, 10);
+    doc.text("Attendance:", 10, 20);
+    dailyAttendance.forEach((r,i)=> doc.text(`${i+1}. ${r.staff} - ${r.status}`, 10, 30+i*10));
+    let offset = 30+dailyAttendance.length*10;
+    doc.text("Advance Payments:", 10, offset);
+    dailyAdvance.forEach((r,i)=> doc.text(`${i+1}. ${r.staff} - ₹${r.amount}`, 10, offset+10+i*10));
+    doc.save("Daily_Report_"+today+".pdf");
   }
 
-  function exportPDF(data, filename) {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-    doc.text("Attendance Report", 14, 20);
-    let y = 30;
-    data.forEach((a, i) => {
-      doc.text(`${i+1}. ${a.name} | ${a.email} | ${a.date} | ${a.status}`, 14, y);
-      y += 10;
-    });
-    doc.save(filename);
-  }
+  function downloadMonthly() {
+    let month = new Date().getMonth();
+    let monthlyAttendance = attendanceData.filter(r=> new Date(r.date).getMonth()===month);
+    let monthlyAdvance = advanceData.filter(r=> new Date(r.date).getMonth()===month);
 
-  function downloadExcel() {
-    let ws = XLSX.utils.json_to_sheet(attendance);
-    let wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Attendance");
-    XLSX.writeFile(wb, "Attendance_Report.xlsx");
+    let { jsPDF } = window.jspdf;
+    let doc = new jsPDF();
+    doc.text("Monthly Report", 10, 10);
+    doc.text("Attendance Records:", 10, 20);
+    monthlyAttendance.forEach((r,i)=> doc.text(`${i+1}. ${r.date} - ${r.staff} - ${r.status}`, 10, 30+i*10));
+    let offset = 30+monthlyAttendance.length*10;
+    doc.text("Advance Payments:", 10, offset);
+    monthlyAdvance.forEach((r,i)=> doc.text(`${i+1}. ${r.date} - ${r.staff} - ₹${r.amount}`, 10, offset+10+i*10));
+    doc.save("Monthly_Report.pdf");
   }
 </script>
 </body>
