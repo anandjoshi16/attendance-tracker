@@ -7,14 +7,14 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
     body { font-family: Arial, sans-serif; background: linear-gradient(135deg,#4facfe,#00f2fe); margin:0; padding:0; color:#333; }
-    .container { max-width:500px; margin:40px auto; background:#fff; padding:20px; border-radius:15px; box-shadow:0 4px 12px rgba(0,0,0,0.2); }
+    .container { max-width:550px; margin:40px auto; background:#fff; padding:20px; border-radius:15px; box-shadow:0 4px 12px rgba(0,0,0,0.2); }
     h2 { text-align:center; margin-bottom:20px; color:#222; }
     input,select,button { width:100%; padding:10px; margin:8px 0; border:1px solid #ccc; border-radius:10px; font-size:16px; }
     button { background:#4facfe; color:white; border:none; cursor:pointer; font-weight:bold; }
     button:hover { background:#00c6fb; }
     .hidden { display:none; }
-    table { width:100%; border-collapse:collapse; margin:15px 0; }
-    th,td { border:1px solid #ddd; padding:8px; text-align:center; }
+    table { width:100%; border-collapse:collapse; margin:15px 0; font-size:14px; }
+    th,td { border:1px solid #ddd; padding:6px; text-align:center; }
     th { background:#4facfe; color:white; }
     .footer { text-align:center; padding:15px; font-size:14px; color:#fff; }
   </style>
@@ -34,7 +34,7 @@
   <h3>Staff Attendance</h3>
   <table id="attendanceTable">
     <thead>
-      <tr><th>Name</th><th>Date</th><th>Status</th><th>In</th><th>Out</th><th>Advance</th></tr>
+      <tr><th>Name</th><th>Date</th><th>Status</th><th>In</th><th>Out</th><th>Hours</th><th>Advance</th></tr>
     </thead>
     <tbody id="attendanceBody"></tbody>
   </table>
@@ -44,6 +44,8 @@
     <option value="Present">Present</option>
     <option value="Absent">Absent</option>
   </select>
+  <input type="time" id="timeInInput" placeholder="Time In">
+  <input type="time" id="timeOutInput" placeholder="Time Out">
   <input type="number" id="advanceInput" placeholder="Advance (if any)">
   <button onclick="markAttendance(true)">Save Attendance</button>
   <hr>
@@ -56,7 +58,7 @@
 <div class="container hidden" id="staffPanel">
   <h2>Staff Panel</h2>
   <p id="staffName"></p>
-  <button onclick="markAttendance(false,'Present')">Mark Present</button>
+  <button onclick="markAttendance(false,'Present')">Mark Present (Auto Time)</button>
   <button onclick="markAttendance(false,'Absent')">Mark Absent</button>
   <button onclick="logout()">Logout</button>
 </div>
@@ -113,31 +115,47 @@
     return new Date().toISOString().split("T")[0];
   }
 
+  function calcHours(inTime,outTime){
+    if(!inTime || !outTime) return "";
+    let [h1,m1]=inTime.split(":").map(Number);
+    let [h2,m2]=outTime.split(":").map(Number);
+    let t1=h1*60+m1, t2=h2*60+m2;
+    if(t2<t1) return "Invalid"; // out < in
+    let diff=t2-t1;
+    return (Math.floor(diff/60)+"h "+(diff%60)+"m");
+  }
+
   function markAttendance(isAdmin,statusOverride=null){
     const today=getToday();
-    let name, status;
+    let name, status, inTime, outTime;
     if(isAdmin){
       name=document.getElementById("staffSelect").value;
       status=document.getElementById("statusSelect").value;
+      inTime=document.getElementById("timeInInput").value;
+      outTime=document.getElementById("timeOutInput").value;
     } else {
       name=currentUser; 
       status=statusOverride;
+      let now=new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
+      inTime=now; outTime=""; // staff panel auto in
     }
 
     let record=attendanceData.find(r=>r.name===name && r.date===today);
     if(!record){
-      record={name,date:today,status,timeIn:"",timeOut:"",advance:0};
+      record={name,date:today,status,timeIn:"",timeOut:"",hours:"",advance:0};
       attendanceData.push(record);
     }
     record.status=status;
     if(status==="Present"){
-      if(!record.timeIn) record.timeIn=new Date().toLocaleTimeString();
-      else record.timeOut=new Date().toLocaleTimeString();
+      if(inTime) record.timeIn=inTime;
+      if(outTime) record.timeOut=outTime;
+      record.hours=calcHours(record.timeIn,record.timeOut);
     }
     if(isAdmin){
       let adv=parseInt(document.getElementById("advanceInput").value||0);
       if(adv>0) record.advance=adv;
     }
+
     localStorage.setItem("attendanceData",JSON.stringify(attendanceData));
     if(isAdmin) renderTable();
     alert("Attendance saved for "+name);
@@ -147,7 +165,7 @@
     let body=document.getElementById("attendanceBody"); body.innerHTML="";
     attendanceData.forEach(r=>{
       let tr=document.createElement("tr");
-      tr.innerHTML=`<td>${r.name}</td><td>${r.date}</td><td>${r.status}</td><td>${r.timeIn}</td><td>${r.timeOut}</td><td>${r.advance}</td>`;
+      tr.innerHTML=`<td>${r.name}</td><td>${r.date}</td><td>${r.status}</td><td>${r.timeIn||""}</td><td>${r.timeOut||""}</td><td>${r.hours||""}</td><td>${r.advance}</td>`;
       body.appendChild(tr);
     });
   }
@@ -176,7 +194,7 @@
       doc.text("No records found.",20,y); 
     } else {
       filtered.forEach(r=>{
-        doc.text(`${r.date} | ${r.name} | ${r.status} | In: ${r.timeIn} | Out: ${r.timeOut} | Adv: ${r.advance}`,20,y);
+        doc.text(`${r.date} | ${r.name} | ${r.status} | In: ${r.timeIn} | Out: ${r.timeOut} | Hrs: ${r.hours} | Adv: ${r.advance}`,20,y);
         y+=10;
       });
     }
