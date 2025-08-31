@@ -122,16 +122,17 @@
   </div>
 
 <script>
-  // Admin Login
+  // ✅ Fixed Admin Login Function
   function adminLogin() {
-    const id = document.getElementById("adminId").value;
-    const pass = document.getElementById("adminPass").value;
+    const id = document.getElementById("adminId").value.trim();
+    const pass = document.getElementById("adminPass").value.trim();
+
     if (id === "anandjoshi@123" && pass === "6508") {
       document.getElementById("loginBox").style.display = "none";
       document.getElementById("attendanceBox").style.display = "block";
       loadAttendance();
     } else {
-      document.getElementById("loginError").innerText = "Invalid credentials!";
+      document.getElementById("loginError").innerText = "❌ Wrong ID or Password!";
     }
   }
 
@@ -142,7 +143,7 @@
     const timeOut = document.getElementById("timeOut").value;
     const advance = document.getElementById("advance").value || 0;
     const absent = document.getElementById("absent").checked;
-    const date = new Date().toLocaleDateString();
+    const date = new Date().toLocaleDateString("en-GB"); // dd/mm/yyyy
 
     if (!staff) {
       alert("Please select staff");
@@ -199,7 +200,7 @@
   }
 
   function downloadDailyReport() {
-    const today = new Date().toLocaleDateString();
+    const today = new Date().toLocaleDateString("en-GB");
     const data = JSON.parse(localStorage.getItem("attendanceData")) || [];
     const rows = data.filter(r => r.date === today).map(r => [r.date, r.staff, r.timeIn||"-", r.timeOut||"-", r.hours, "₹"+r.advance, r.status]);
     if(rows.length === 0) { alert("No data for today"); return; }
@@ -208,8 +209,12 @@
 
   function downloadMonthlyReport() {
     const month = new Date().getMonth();
+    const year = new Date().getFullYear();
     const data = JSON.parse(localStorage.getItem("attendanceData")) || [];
-    const rows = data.filter(r => new Date(r.date).getMonth() === month).map(r => [r.date, r.staff, r.timeIn||"-", r.timeOut||"-", r.hours, "₹"+r.advance, r.status]);
+    const rows = data.filter(r => {
+      const d = new Date(r.date.split("/").reverse().join("-"));
+      return d.getMonth() === month && d.getFullYear() === year;
+    }).map(r => [r.date, r.staff, r.timeIn||"-", r.timeOut||"-", r.hours, "₹"+r.advance, r.status]);
     if(rows.length === 0) { alert("No data for this month"); return; }
     generatePDF("Monthly_Report", rows);
   }
