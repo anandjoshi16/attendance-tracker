@@ -4,10 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Attendance Pro</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
-      background: linear-gradient(to right, #e3fce1, #ece9ff);
+      background: linear-gradient(to right, #f8fafc, #e0f2fe);
       margin: 0; padding: 0;
     }
     .container {
@@ -20,7 +22,7 @@
       background: white;
       padding: 30px;
       border-radius: 15px;
-      box-shadow: 0px 4px 10px rgba(0,0,0,0.1);
+      box-shadow: 0px 4px 15px rgba(0,0,0,0.1);
       margin: 10px;
       width: 300px;
     }
@@ -40,16 +42,18 @@
       color: white;
       font-size: 16px;
       cursor: pointer;
+      margin-top: 5px;
     }
     button:hover { background: #334155; }
     .hidden { display: none; }
-    #dashboard {
-      padding: 20px;
-    }
+    #dashboard { padding: 20px; }
     table {
       width: 100%;
       border-collapse: collapse;
       margin-top: 20px;
+      background: white;
+      border-radius: 10px;
+      overflow: hidden;
     }
     th, td {
       border: 1px solid #ddd;
@@ -60,20 +64,26 @@
       background: #0f172a;
       color: white;
     }
+    .actions {
+      margin-top: 15px;
+      display: flex;
+      gap: 10px;
+    }
   </style>
 </head>
 <body>
 
+  <!-- Auth Section -->
   <div id="auth" class="container">
     <div class="card">
-      <h2>Welcome Back</h2>
+      <h2>Login</h2>
       <input type="email" id="loginEmail" placeholder="Email">
       <input type="password" id="loginPassword" placeholder="Password">
       <button onclick="signIn()">Sign In</button>
     </div>
 
     <div class="card">
-      <h2>Create Account</h2>
+      <h2>Register</h2>
       <input type="text" id="regName" placeholder="Full Name">
       <input type="email" id="regEmail" placeholder="Email">
       <input type="password" id="regPassword" placeholder="Password">
@@ -81,22 +91,32 @@
     </div>
   </div>
 
+  <!-- Dashboard -->
   <div id="dashboard" class="hidden">
     <h1>Attendance Dashboard</h1>
     <button onclick="logout()">Logout</button>
+
     <h2>Mark Attendance</h2>
     <button onclick="markAttendance()">Mark Present</button>
 
-    <h2>Monthly Attendance</h2>
+    <h2>Attendance Records</h2>
     <table id="attendanceTable">
       <thead>
         <tr>
+          <th>Name</th>
+          <th>Email</th>
           <th>Date</th>
           <th>Status</th>
         </tr>
       </thead>
       <tbody></tbody>
     </table>
+
+    <div class="actions">
+      <button onclick="downloadDailyPDF()">Download Daily PDF</button>
+      <button onclick="downloadMonthlyPDF()">Download Monthly PDF</button>
+      <button onclick="downloadExcel()">Download Excel</button>
+    </div>
   </div>
 
 <script>
@@ -107,7 +127,6 @@
     const email = document.getElementById("loginEmail").value;
     const pass = document.getElementById("loginPassword").value;
 
-    // 🔑 Default admin login
     if (email === "admin@demo.com" && pass === "123456") {
       currentUser = { name: "Admin", email };
       showDashboard();
@@ -115,7 +134,6 @@
       return;
     }
 
-    // Normal user login (saved locally)
     let users = JSON.parse(localStorage.getItem("users")) || [];
     let found = users.find(u => u.email === email && u.pass === pass);
     if (found) {
@@ -159,7 +177,7 @@
     if (!currentUser) return;
     let today = new Date().toLocaleDateString();
     if (!attendance.find(a => a.date === today && a.email === currentUser.email)) {
-      attendance.push({ email: currentUser.email, date: today, status: "Present" });
+      attendance.push({ name: currentUser.name, email: currentUser.email, date: today, status: "Present" });
       localStorage.setItem("attendance", JSON.stringify(attendance));
       loadAttendance();
       alert("Attendance marked!");
@@ -171,12 +189,44 @@
   function loadAttendance() {
     let tbody = document.querySelector("#attendanceTable tbody");
     tbody.innerHTML = "";
-    attendance
-      .filter(a => a.email === currentUser.email)
-      .forEach(a => {
-        let row = `<tr><td>${a.date}</td><td>${a.status}</td></tr>`;
-        tbody.innerHTML += row;
-      });
+    let filtered = currentUser.email === "admin@demo.com" ? attendance : attendance.filter(a => a.email === currentUser.email);
+    filtered.forEach(a => {
+      let row = `<tr><td>${a.name}</td><td>${a.email}</td><td>${a.date}</td><td>${a.status}</td></tr>`;
+      tbody.innerHTML += row;
+    });
+  }
+
+  // 📄 PDF + Excel Export
+  function downloadDailyPDF() {
+    let today = new Date().toLocaleDateString();
+    let data = attendance.filter(a => a.date === today);
+    exportPDF(data, `Daily_Report_${today}.pdf`);
+  }
+
+  function downloadMonthlyPDF() {
+    let month = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
+    let currentMonth = new Date().getMonth();
+    let data = attendance.filter(a => new Date(a.date).getMonth() === currentMonth);
+    exportPDF(data, `Monthly_Report_${month}.pdf`);
+  }
+
+  function exportPDF(data, filename) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    doc.text("Attendance Report", 14, 20);
+    let y = 30;
+    data.forEach((a, i) => {
+      doc.text(`${i+1}. ${a.name} | ${a.email} | ${a.date} | ${a.status}`, 14, y);
+      y += 10;
+    });
+    doc.save(filename);
+  }
+
+  function downloadExcel() {
+    let ws = XLSX.utils.json_to_sheet(attendance);
+    let wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Attendance");
+    XLSX.writeFile(wb, "Attendance_Report.xlsx");
   }
 </script>
 </body>
